@@ -1,0 +1,16 @@
+# Ignore the compiled files.
+bin/
+build/
+
+# Ignore the projec report.
+report_EL2620/
+
+# Ignore the test data.
+test/data/
+
+# Ignore tmp files.
+.**~
+
+# Ignore coding environment files.
+.git
+.vscode**
