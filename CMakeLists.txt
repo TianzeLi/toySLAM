@@ -50,6 +50,7 @@ list(APPEND LINK_LIBS
 # Set sourcefiles.
 list(APPEND SOURCEFILES
   src/data_stereo.cpp
+  src/vo_frontend.cpp
 )
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
@@ -73,7 +74,9 @@ add_library(toyslam SHARED ${SOURCEFILES})
 target_link_libraries(toyslam ${LINK_LIBS})
 
 # Testing modules.
-add_executable(test_data_loader test/src/test_data_loader.cpp)
-target_link_libraries(test_data_loader ${LINK_LIBS} toyslam)
 add_executable(check_dep_version test/src/check_dep_version.cpp)
 target_link_libraries(check_dep_version ${LINK_LIBS})
+add_executable(test_data_loader test/src/test_data_loader.cpp)
+target_link_libraries(test_data_loader ${LINK_LIBS} toyslam)
+add_executable(test_vo_frontend test/src/test_vo_frontend.cpp)
+target_link_libraries(test_vo_frontend ${LINK_LIBS} toyslam)

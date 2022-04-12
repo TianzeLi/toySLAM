@@ -9,8 +9,8 @@
  * 
  */
 
-#ifndef TOYSLAM_DATASTEREO_H
-#define TOYSLAM_DATASTEREO_H
+#ifndef TOYSLAM_DATA_STEREO_H
+#define TOYSLAM_DATA_STEREO_H
 
 #include "toyslam/common_include.h"
 #include "toyslam/frame.h"
@@ -20,7 +20,9 @@ namespace toyslam {
 
 class DataStereo {
 public:
-  bool Init();
+  typedef std::shared_ptr<DataStereo> Ptr;
+
+  bool init();
   DataStereo(const std::string& path);
   Frame::Ptr nextFrame();
   Camera::Ptr getCamera() const { return camera_; }

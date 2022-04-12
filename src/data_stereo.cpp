@@ -9,7 +9,7 @@ namespace toyslam {
 
 DataStereo::DataStereo(const std::string& path) : dataset_path_(path) {}
 
-bool DataStereo::Init() {
+bool DataStereo::init() {
   ifstream fin(dataset_path_ + "/calib.txt");
   if (!fin) {
     LOG(ERROR) << "cannot find " << dataset_path_ << "calib.txt.";

@@ -13,6 +13,7 @@
 #define TOYSLAM_FRAME_H
 
 #include "toyslam/common_include.h"
+#include "toyslam/feature.h"
 
 namespace toyslam {
 
@@ -24,6 +25,11 @@ public:
   double time_stamp;
   Sophus::SE3d pose;              // pose in the homogeneous matrix
   cv::Mat img_left, img_right;    // stereo images
+  
+  // Features in the left image.
+  std::vector<Feature> features_left;
+  std::vector<Feature> features_right;
+
 
   Frame() = default;
   Frame(unsigned long i, double t, Sophus::SE3d p, 
@@ -33,15 +39,13 @@ public:
         img_right = imgr;
   }
 
-  static std::shared_ptr<Frame> CreateFrame();
-};
-
-Frame::Ptr Frame::CreateFrame() {
+  static std::shared_ptr<Frame> CreateFrame(){
     static long factory_id = 0;
     Frame::Ptr new_frame(new Frame);
     new_frame->id = factory_id++;
     return new_frame;
-}
+  }
+};
 
 } //namespace toyslam
 #endif //TOYSLAM_FRAME_H
