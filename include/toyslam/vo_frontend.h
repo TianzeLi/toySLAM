@@ -47,14 +47,24 @@ private:
   // Pointer to the current frame
   Frame::Ptr frame_current_ = nullptr;
   Frame::Ptr frame_previous_ = nullptr;
-  
-  std::vector<Feature> detectAndMatch(cv::Mat &img1, cv::Mat &img2);
-  // 
+
+  // Detect and match left and right image from the same frame.
+  std::vector<Feature> detectAndMatchLR(cv::Mat &img1, cv::Mat &img2);
+  // Triangulate the matched point from two images and compute the XYZ w.r.t frame 1.
   Eigen::Matrix<double, 3, 1> triangulate(cv::KeyPoint &k1, 
-                                           cv::KeyPoint &k2,
-                                           const Camera::Ptr &c1, 
-                                           const Camera::Ptr &c2);
-  // Frame::Ptr estimateTransform(Frame& frame);
+                                          cv::KeyPoint &k2,
+                                          const Camera::Ptr &c1, 
+                                          const Camera::Ptr &c2);
+  // Match the keypoints in two frames.
+  std::vector<cv::DMatch> MatchTwoFrames(cv::Mat &img1, 
+                                         cv::Mat &img2,
+                                         std::vector<Feature> &features_curr, 
+                                         std::vector<Feature> &features_prev);
+  
+  // Compute the transform from the previous frame to the current frame.
+  // Sophus::SE3d estimateTransform(const std::vector<Feature> &features_curr, 
+  //                                const std::vector<Feature> &features_prev,
+  //                                cv::DMatch match_two_frames);
 };
 
 } // namespace toyslam

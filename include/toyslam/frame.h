@@ -26,7 +26,7 @@ public:
   Sophus::SE3d pose;              // pose in the homogeneous matrix
   cv::Mat img_left, img_right;    // stereo images
   
-  // Features in the left image.
+  // Features in the left and right image.
   std::vector<Feature> features_left;
   std::vector<Feature> features_right;
 
