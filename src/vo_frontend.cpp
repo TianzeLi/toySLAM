@@ -1,6 +1,7 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include "opencv2/imgproc/imgproc.hpp"
+#include <opencv2/imgproc/imgproc.hpp>
+#include <Eigen/Dense>
 
 #include "toyslam/vo_frontend.h"
 
@@ -12,31 +13,33 @@ bool VOFront::init(){
     LOG(INFO) << "Data loaded. ";
   else 
     LOG(ERROR) << "Data failed to load. ";
-
-  // Obtain the camera intrinsic matrix.
-  Camera::Ptr camera = data->getCamera();
   
   // Obtain the first frame.
   frame_current_ = data->nextFrame();
   frame_previous_ = frame_current_; 
   assert(frame_current_ != nullptr);
-
+  
   return true;
 }
 
 int VOFront::run(){
-    while (frame_current_ != nullptr) {
-      // Detect and match left and right image from the same frame.
-      frame_current_->features_left = detectAndMatch(frame_current_->img_left, 
-                                                    frame_current_->img_right);
-      
-      // Detect and match left images from two consective frames.
-      // detectAndMatch(frame_current_->img_left, frame_previous_->img_left);
-      
-      
-      frame_previous_ = frame_current_;
-      frame_current_ = data->nextFrame();
-    }
+  LOG(INFO) << " VO frontend now start to process the first frame. ";
+
+  while (frame_current_ != nullptr) {
+    // Detect and match left and right image from the same frame.
+    frame_current_->features_left = detectAndMatch(frame_current_->img_left, 
+                                                   frame_current_->img_right);
+    
+    // Detect and match left images from two consective frames.
+    // detectAndMatch(frame_current_->img_left, frame_previous_->img_left);
+    
+    // Estimate the pose of the frame.
+    // frame_current_.pose =  estimateTransform(frame_current_, frame_previous_);
+    // vo_front.pose = frame_current_.pose;
+
+    frame_previous_ = frame_current_;
+    frame_current_ = data->nextFrame();
+  }
 
   return 0;
 }
@@ -70,13 +73,11 @@ std::vector<Feature> VOFront::detectAndMatch(cv::Mat &img1, cv::Mat &img2) {
   // Check the matched point by its distance to the min distance detected.
   auto min_max = std::minmax_element(matches.begin(), matches.end(),
                                 [](const cv::DMatch &m1, const cv::DMatch &m2) 
-                                { 
-                                  return m1.distance < m2.distance; 
-                                });
+                                { return m1.distance < m2.distance; });
   double min_dist = min_max.first->distance;
   double max_dist = min_max.second->distance;
-  printf("-- Max dist : %f \n", max_dist);
-  printf("-- Min dist : %f \n", min_dist);
+  VLOG(2) << "-- Max dist : " << max_dist;
+  VLOG(2) << "-- Min dist : " << min_dist;
 
   // Reject those twice the size of the min distance. 
   // Use 30 as an emphrical value in case the min distance is too small.
@@ -85,6 +86,18 @@ std::vector<Feature> VOFront::detectAndMatch(cv::Mat &img1, cv::Mat &img2) {
     if (matches[i].distance <= std::max(2 * min_dist, 30.0)) {
       good_matches.push_back(matches[i]);
     }
+  }
+  VLOG(2) << "Obatined " << matches.size() << " matches.";
+  VLOG(2) << "Obatined " << good_matches.size() << " good matches.";
+
+  // Generate the features.
+  std::vector<Feature> v;
+  for (cv::DMatch m : good_matches) { 
+    int i1 = m.queryIdx;
+    int i2 = m.trainIdx;
+    Feature f(kps1[i1]);
+    f.xyz = VOFront::triangulate(kps1[i1], kps2[i2], data->getCamera(0), data->getCamera(1));
+    v.push_back(f);
   }
 
   // Display the matching result. 
@@ -98,21 +111,52 @@ std::vector<Feature> VOFront::detectAndMatch(cv::Mat &img1, cv::Mat &img2) {
   cv::imshow("Good matches", img_goodmatch);
   cv::waitKey(0);
 
-  std::vector<Feature> v;
-  for (cv::KeyPoint kp : kps1) {
-    v.push_back(Feature(kp));
-  }
-
   return v;
 }
 
 
-// std::vector<cv::KeyPoint> VOFront trianglation(std::vector<cv::KeyPoint> k1,
-//                                                std::vector<cv::KeyPoint> k2,
-//                                                Camera::Ptr c1, 
-//                                                Camera::Ptr c2){
-     
-//                                                }
+Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1, 
+                                                 cv::KeyPoint &k2,
+                                                 const Camera::Ptr &c1, 
+                                                 const Camera::Ptr &c2) {
+  Eigen::Matrix<double, 3, 1> XYZ;
+  Eigen::Matrix<double, 3, 1> uv1;
+  Eigen::Matrix<double, 3, 3> uv1_mat;
+  Eigen::Matrix<double, 3, 3> uv2_mat;
+  uv1 << k1.pt.x, k1.pt.y, 1;
+  // Put into the dot product form.
+  uv1_mat << 0.0, -1.0, k1.pt.y,
+             1.0, 0.0, -k1.pt.x,
+             -k1.pt.y, -k1.pt.x, 0.0;
+  uv2_mat << 0.0, -1.0, k2.pt.y,
+             1.0, 0.0, -k2.pt.x,
+             -k2.pt.y, -k2.pt.x, 0.0;
+  // In Kitti, R = I, t = [0, 0.54, 0]
+  // R21 = 
+  Eigen::Matrix<double, 3, 1> t21;
+  t21 << 0.0, 0.54, 0.0; // -0.54??  
+  
+  VLOG(4) << "uv1_mat: \n" << uv1_mat;
+  VLOG(4) << "uv2_mat: \n" << uv2_mat;
+  VLOG(4) << "c1->K_inv: \n" << c1->K_inv;
+  VLOG(4) << "c2->K_inv: \n" << c2->K_inv;
+
+  Eigen::Matrix<double, 3, 1> A;
+  Eigen::Matrix<double, 3, 1> b;
+  A = c2->K_inv * uv1_mat * c1->K_inv * uv1;
+  b = -1 * c2->K_inv * uv1_mat * t21;
+
+  // Solve the least square error, QR method from Eigen.
+  Eigen::Matrix<double, 1, 1>  s1 = A.colPivHouseholderQr().solve(b);
+  double relative_error = (A*s1 - b).norm() / b.norm(); // norm() is L2 norm
+  // Recover XYZ.
+  double s1_scalar = s1(0,0);
+  XYZ = s1_scalar * c1->K_inv * uv1;
+  VLOG(3) << "Feature point obtained w.r.t the left camera frame: " << XYZ;
+  VLOG(3) << "The relative error in triangulation: " << relative_error;
+  
+  return XYZ;
+}
 
 
 // Frame::Ptr VOFront::estimateTransform(Frame& frame) {

@@ -25,8 +25,8 @@ endif()
 include_directories("/usr/include/eigen3")
 find_package(OpenCV REQUIRED)
 find_package(Sophus REQUIRED)
-find_package(Glog REQUIRED)
-find_package(GFlags REQUIRED)
+find_package(Glog REQUIRED) 
+find_package(gflags REQUIRED)
 
 # Include dirs
 include_directories(

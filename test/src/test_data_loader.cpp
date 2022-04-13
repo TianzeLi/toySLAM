@@ -27,12 +27,14 @@ int main(int argc, char* argv[]) {
   else 
     LOG(ERROR) << "Data failed to load. ";
 
-  // Print the intrinsic matrix.
-  toyslam::Camera::Ptr camera = data.getCamera();
-  LOG(INFO) << "The stereo camera info." << endl 
-            << "Baseline length (m): " << camera->baseline << endl
-            << "Camera intrinsic matrix: " 
-            << endl << camera->K;
+  // Print the intrinsic matrix of camera 0 and 1.
+  for (int i = 0; i < 2; i++) {
+    toyslam::Camera::Ptr camera = data.getCamera(i);
+    LOG(INFO) << "The stereo camera info." << endl 
+              << "Baseline length (m): " << camera->baseline << endl
+              << "Camera intrinsic matrix: " 
+              << endl << camera->K;
+  }
   
   // Display the stream according to its timestamp.
   auto frame = data.nextFrame();

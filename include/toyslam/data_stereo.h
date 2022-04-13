@@ -24,13 +24,19 @@ public:
 
   bool init();
   DataStereo(const std::string& path);
+  // To obtain the pointer to the next frame.
   Frame::Ptr nextFrame();
-  Camera::Ptr getCamera() const { return camera_; }
+  // To get the camera by its No. in the camera pointer vector.
+  Camera::Ptr getCamera(int id) const { return cameras_.at(id); }
 
 private:
+  // The path of the dataset. 
   std::string dataset_path_;
+  // Image resize ratio. 
+  double resize_ratio_ = 1.0;
+
   int current_image_index_ = 0;
-  Camera::Ptr camera_;
+  std::vector<Camera::Ptr> cameras_;
 };
 
 } // namespace toyslam

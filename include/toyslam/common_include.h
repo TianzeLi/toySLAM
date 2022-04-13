@@ -13,9 +13,10 @@
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Geometry>
 
-#include <sophus/se3.hpp>
+#include <sophus/se3.hpp> 
 #include <sophus/so3.hpp>
 
 #include <glog/logging.h>
+#include <gflags/gflags.h>
 
 #endif // TOYSLAM_COMMON_INCLUDE_H

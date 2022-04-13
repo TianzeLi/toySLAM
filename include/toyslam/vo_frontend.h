@@ -49,11 +49,11 @@ private:
   Frame::Ptr frame_previous_ = nullptr;
   
   std::vector<Feature> detectAndMatch(cv::Mat &img1, cv::Mat &img2);
-  
-  //  trianglation(std::vector<cv::KeyPoint> k1,
-  //                                        std::vector<cv::KeyPoint> k2,
-  //                                        Camera::Ptr c1, 
-  //                                        Camera::Ptr c2);
+  // 
+  Eigen::Matrix<double, 3, 1> triangulate(cv::KeyPoint &k1, 
+                                           cv::KeyPoint &k2,
+                                           const Camera::Ptr &c1, 
+                                           const Camera::Ptr &c2);
   // Frame::Ptr estimateTransform(Frame& frame);
 };
 
