@@ -62,9 +62,9 @@ private:
                                          std::vector<Feature> &features_prev);
   
   // Compute the transform from the previous frame to the current frame.
-  // Sophus::SE3d estimateTransform(const std::vector<Feature> &features_curr, 
-  //                                const std::vector<Feature> &features_prev,
-  //                                cv::DMatch match_two_frames);
+  Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr, 
+                                 Frame::Ptr &frame_prev,
+                                 std::vector<cv::DMatch> match_two_frames);
 };
 
 } // namespace toyslam

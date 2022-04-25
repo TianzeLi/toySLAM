@@ -2,6 +2,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <Eigen/Dense>
+#include <boost/format.hpp>
+
 
 #include "toyslam/vo_frontend.h"
 
@@ -36,15 +38,17 @@ int VOFront::run(){
       continue;
     }
     std::vector<cv::DMatch> matches_two_frames;
-    // Detect and match left images from two consective frames.
+    // Detect and match left images from two consecutive frames.
     matches_two_frames = MatchTwoFrames(frame_current_->img_left, 
                                         frame_previous_->img_left,
                                         frame_current_->features_left, 
                                         frame_previous_->features_left);
     
-    // Estimate the pose of the frame.
-    // frame_current_.pose =  estimateTransform(frame_current_, frame_previous_);
-    // vo_front.pose = frame_current_.pose;
+    // // Estimate the pose of the frame.
+    // frame_current_->pose =  estimateTransform(frame_current_, 
+    //                                           frame_previous_,
+    //                                           matches_two_frames);
+    pose = frame_current_->pose;
 
     frame_previous_ = frame_current_;
     frame_current_ = data->nextFrame();
@@ -130,38 +134,36 @@ Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1,
                                                  const Camera::Ptr &c2){
   Eigen::Matrix<double, 3, 1> XYZ;
   Eigen::Matrix<double, 3, 1> uv1;
-  Eigen::Matrix<double, 3, 3> uv1_mat;
-  Eigen::Matrix<double, 3, 3> uv2_mat;
+  Eigen::Matrix<double, 3, 1> uv2;
   uv1 << k1.pt.x, k1.pt.y, 1;
-  // Put into the dot product form.
-  uv1_mat << 0.0, -1.0, k1.pt.y,
-             1.0, 0.0, -k1.pt.x,
-             -k1.pt.y, -k1.pt.x, 0.0;
-  uv2_mat << 0.0, -1.0, k2.pt.y,
-             1.0, 0.0, -k2.pt.x,
-             -k2.pt.y, -k2.pt.x, 0.0;
+  uv2 << k2.pt.x, k2.pt.y, 1;
+
   // In Kitti, R = I, t = [0, 0.54, 0]
   // R21 = 
   Eigen::Matrix<double, 3, 1> t21;
-  t21 << 0.0, 0.54, 0.0; // -0.54??  
+  t21 << 0.54, 0.0, 0.0;  
   
-  VLOG(4) << "uv1_mat: \n" << uv1_mat;
-  VLOG(4) << "uv2_mat: \n" << uv2_mat;
-  VLOG(4) << "c1->K_inv: \n" << c1->K_inv;
-  VLOG(4) << "c2->K_inv: \n" << c2->K_inv;
+  VLOG(5) << "uv1_mat: \n" << uv1;
+  VLOG(5) << "uv2_mat: \n" << uv2;
+  VLOG(5) << "c1->K_inv: \n" << c1->K_inv;
+  VLOG(5) << "c2->K_inv: \n" << c2->K_inv;
 
-  Eigen::Matrix<double, 3, 1> A;
-  Eigen::Matrix<double, 3, 1> b;
-  A = c2->K_inv * uv1_mat * c1->K_inv * uv1;
-  b = -1 * c2->K_inv * uv1_mat * t21;
+  Eigen::Matrix<double, 3, 2> A;
+  A << c1->K_inv * uv1, -1 * c2->K_inv * uv2;
+  VLOG(4) << "A = \n" << A;
 
   // Solve the least square error, QR method from Eigen.
-  Eigen::Matrix<double, 1, 1>  s1 = A.colPivHouseholderQr().solve(b);
-  double relative_error = (A*s1 - b).norm() / b.norm(); // norm() is L2 norm
+  Eigen::Matrix<double, 2, 1>  s = A.colPivHouseholderQr().solve(t21);
+  double relative_error = (A*s - t21).norm() / t21.norm(); // norm() is L2 norm
   // Recover XYZ.
-  double s1_scalar = s1(0,0);
+  double s1_scalar = s(0,0);
+  double s2_scalar = s(1,0);
+
+  if ( s1_scalar < 0 ) LOG(WARNING) << "Depth in left image estimated as negative.";
+  if ( s2_scalar < 0 ) LOG(WARNING) << "Depth in right image estimated as negative.";
+
   XYZ = s1_scalar * c1->K_inv * uv1;
-  VLOG(3) << "Feature point obtained w.r.t the left camera frame: " << XYZ;
+  VLOG(3) << "\nFeature point obtained w.r.t the left camera frame: " << XYZ;
   VLOG(3) << "The relative error in triangulation: " << relative_error;
   
   return XYZ;
@@ -223,8 +225,22 @@ std::vector<cv::DMatch> VOFront::MatchTwoFrames(cv::Mat &img1,
   return good_matches;
   }
 
-// Frame::Ptr VOFront::estimateTransform(Frame& frame) {
+// Estiamte the transform from corresponding features.
+Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr, 
+                               Frame::Ptr &frame_prev,
+                               std::vector<cv::DMatch> matches){
+  Sophus::SE3d transfrom_est;
 
-// }
+  std::vector<Feature> v;
+  for (cv::DMatch m : matches) { 
+    int i1 = m.queryIdx;
+    int i2 = m.trainIdx;
+    
+    // Paired feature points' 3D coordinate in prev. frame and 2D in current image.
+    frame_curr->features_left[i1].uv, frame_prev->features_left[i2].xyz;
+  }
+
+  return transfrom_est*frame_prev->pose; // Need to check.
+}
 
 } // namespace toyslam

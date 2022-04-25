@@ -71,7 +71,7 @@ endif(HAVE_G2O)
 
 # Create toyslam library.
 add_library(toyslam SHARED ${SOURCEFILES})
-target_link_libraries(toyslam ${LINK_LIBS})
+target_link_libraries(toyslam ${LINK_LIBS} fmt)
 
 # Testing modules.
 add_executable(check_dep_version test/src/check_dep_version.cpp)
