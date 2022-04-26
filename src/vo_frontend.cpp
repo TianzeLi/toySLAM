@@ -109,8 +109,16 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
     int i1 = m.queryIdx;
     int i2 = m.trainIdx;
     Feature f(kps1[i1]);
-    f.xyz = VOFront::triangulate(kps1[i1], kps2[i2], data->getCamera(0), data->getCamera(1));
-    v.push_back(f);
+    double relative_error = 1.0;
+    f.xyz = VOFront::triangulate(kps1[i1], kps2[i2], 
+                                 data->getCamera(0), data->getCamera(1),
+                                 relative_error);
+    // Display the matched pair for debugging.
+    VOFront::displaySingleMatch(img1, img2, kps1[i1], kps2[i2]);
+    if (do_triangulation_rejection_  && (relative_error > reprojection_threshold_))
+        continue;
+    else 
+      v.push_back(f);
   }
 
   // Display the matching result. 
@@ -131,7 +139,8 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
 Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1, 
                                                  cv::KeyPoint &k2,
                                                  const Camera::Ptr &c1, 
-                                                 const Camera::Ptr &c2){
+                                                 const Camera::Ptr &c2,
+                                                 double &relative_error){
   Eigen::Matrix<double, 3, 1> XYZ;
   Eigen::Matrix<double, 3, 1> uv1;
   Eigen::Matrix<double, 3, 1> uv2;
@@ -154,7 +163,7 @@ Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1,
 
   // Solve the least square error, QR method from Eigen.
   Eigen::Matrix<double, 2, 1>  s = A.colPivHouseholderQr().solve(t21);
-  double relative_error = (A*s - t21).norm() / t21.norm(); // norm() is L2 norm
+  relative_error = (A*s - t21).norm() / t21.norm(); // norm() is L2 norm
   // Recover XYZ.
   double s1_scalar = s(0,0);
   double s2_scalar = s(1,0);
@@ -163,7 +172,7 @@ Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1,
   if ( s2_scalar < 0 ) LOG(WARNING) << "Depth in right image estimated as negative.";
 
   XYZ = s1_scalar * c1->K_inv * uv1;
-  VLOG(3) << "\nFeature point obtained w.r.t the left camera frame: " << XYZ;
+  VLOG(3) << "\nFeature point obtained w.r.t the left camera frame: " << XYZ.transpose();
   VLOG(3) << "The relative error in triangulation: " << relative_error;
   
   return XYZ;
@@ -226,7 +235,7 @@ std::vector<cv::DMatch> VOFront::MatchTwoFrames(cv::Mat &img1,
   }
 
 // Estiamte the transform from corresponding features.
-Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr, 
+Sophus::SE3d VOFront::estimateTransform(Frame::Ptr &frame_curr, 
                                Frame::Ptr &frame_prev,
                                std::vector<cv::DMatch> matches){
   Sophus::SE3d transfrom_est;
@@ -241,6 +250,33 @@ Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr,
   }
 
   return transfrom_est*frame_prev->pose; // Need to check.
+}
+
+// Display the matched pair for debugging.
+void VOFront::displaySingleMatch(cv::Mat &img1, 
+                                 cv::Mat &img2,
+                                 cv::KeyPoint &k1, 
+                                 cv::KeyPoint &k2){
+  double draw_multiplier = 1.0;
+  cv::Mat img_k1;
+  cv::Mat img_k2;
+  cv::Mat img_match;
+  std::vector<cv::KeyPoint> kps1, kps2;
+  kps1.push_back(k1);
+  kps2.push_back(k2);
+  cv::drawKeypoints(img1, kps1, img_k1);
+  cv::drawKeypoints(img2, kps2, img_k2);
+  cv::vconcat(img_k1, img_k2, img_match);
+  cv::resize(img_match, img_match, cv::Size(), draw_multiplier, draw_multiplier);
+  cv::Point2f pt1 = k1.pt, pt2 = k2.pt,
+              dpt2 = cv::Point2f( pt2.x, pt2.y+img1.rows );
+
+  cv::line( img_match,
+            cv::Point(cvRound(pt1.x*draw_multiplier), cvRound(pt1.y*draw_multiplier)),
+            cv::Point(cvRound(dpt2.x*draw_multiplier), cvRound(dpt2.y*draw_multiplier)),
+            cv::Scalar(255, 128, 0), 3 );
+  cv::imshow("Good matches between frames", img_match);
+  cv::waitKey(0);
 }
 
 } // namespace toyslam

@@ -42,6 +42,11 @@ private:
   // State of the VO frontend.
   unsigned state_ = 0;
 
+  // If true, use triangulation reprojection error to reject mismatches.
+  bool do_triangulation_rejection_ = true;
+  // Triangulation reprojection error threshold.
+  double reprojection_threshold_ = 0.15;
+
   DataStereo::Ptr data = nullptr;
 
   // Pointer to the current frame
@@ -54,7 +59,8 @@ private:
   Eigen::Matrix<double, 3, 1> triangulate(cv::KeyPoint &k1, 
                                           cv::KeyPoint &k2,
                                           const Camera::Ptr &c1, 
-                                          const Camera::Ptr &c2);
+                                          const Camera::Ptr &c2,
+                                          double &error);
   // Match the keypoints in two frames.
   std::vector<cv::DMatch> MatchTwoFrames(cv::Mat &img1, 
                                          cv::Mat &img2,
@@ -65,6 +71,12 @@ private:
   Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr, 
                                  Frame::Ptr &frame_prev,
                                  std::vector<cv::DMatch> match_two_frames);
+
+  // Display the matched pair for debugging.
+  void displaySingleMatch(cv::Mat &img1, 
+                          cv::Mat &img2,
+                          cv::KeyPoint &k1, 
+                          cv::KeyPoint &k2);
 };
 
 } // namespace toyslam
