@@ -46,6 +46,13 @@ private:
   bool do_triangulation_rejection_ = true;
   // Triangulation reprojection error threshold.
   double reprojection_threshold_ = 0.15;
+  // Gauss-Newton optimization iteration threshold. 
+  double epsilon_mag_threshold_ = 0.01; 
+
+  // Display images settings.
+  bool show_left_and_right_matches_ = true;
+  bool show_prev_and_curr_matches_ = true;
+  bool diaplay_single_match_ = false;
 
   DataStereo::Ptr data = nullptr;
 
@@ -68,9 +75,10 @@ private:
                                          std::vector<Feature> &features_prev);
   
   // Compute the transform from the previous frame to the current frame.
-  Sophus::SE3d estimateTransform(Frame::Ptr &frame_curr, 
-                                 Frame::Ptr &frame_prev,
-                                 std::vector<cv::DMatch> match_two_frames);
+  Sophus::SE3d estimateTransformPnP(Frame::Ptr &frame_curr, 
+                                    Frame::Ptr &frame_prev,
+                                    std::vector<cv::DMatch> match_two_frames,
+                                    const Camera::Ptr &c_curr);
 
   // Display the matched pair for debugging.
   void displaySingleMatch(cv::Mat &img1, 

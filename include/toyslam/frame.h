@@ -23,8 +23,10 @@ public:
 
   unsigned long id;
   double time_stamp;
-  Sophus::SE3d pose;              // pose in the homogeneous matrix
-  cv::Mat img_left, img_right;    // stereo images
+  // Pose in the homogeneous matrix. P_frame = T_frame * P_absolute. 
+  Sophus::SE3d pose;              
+  // Stereo images
+  cv::Mat img_left, img_right;    
   
   // Features in the left and right image.
   std::vector<Feature> features_left;
