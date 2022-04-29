@@ -47,10 +47,10 @@ private:
   // Triangulation reprojection error threshold.
   double reprojection_threshold_ = 0.15;
   // Gauss-Newton optimization iteration threshold. 
-  double epsilon_mag_threshold_ = 0.01; 
+  double epsilon_mag_threshold_ = 0.0001; 
 
   // Display images settings.
-  bool show_left_and_right_matches_ = true;
+  bool show_left_and_right_matches_ = false;
   bool show_prev_and_curr_matches_ = true;
   bool diaplay_single_match_ = false;
 
