@@ -29,7 +29,7 @@ public:
   // Frequently used inverse matrix of K 
   Eigen::Matrix<double, 3, 3> K_inv;
   
-  // Pose of the camera.
+  // Pose of the camera w.r.t to a fixed frame on the robot system.
   Sophus::SE3d pose_;
 
   Camera() = default;

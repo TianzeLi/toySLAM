@@ -21,6 +21,9 @@
 
 namespace toyslam{
 
+struct TrianglationResult {Eigen::Matrix<double, 3, 1> XYZ; double relative_error;};
+
+
 class VOFront {
 public:
   // The estimated pose of the left camera center.
@@ -45,7 +48,7 @@ private:
   // If true, use triangulation reprojection error to reject mismatches.
   bool do_triangulation_rejection_ = true;
   // Triangulation reprojection error threshold.
-  double reprojection_threshold_ = 0.15;
+  double triangulate_error_threshold_ = 0.15;
   // Gauss-Newton optimization iteration threshold. 
   double epsilon_mag_threshold_ = 0.0001; 
   // Gauss-Newton optimization maximal iteration times. 
@@ -65,11 +68,10 @@ private:
   // Detect and match left and right image from the same frame.
   std::vector<Feature> detectAndMatchLR(cv::Mat &img1, cv::Mat &img2);
   // Triangulate the matched point from two images and compute the XYZ w.r.t frame 1.
-  Eigen::Matrix<double, 3, 1> triangulate(cv::KeyPoint &k1, 
-                                          cv::KeyPoint &k2,
-                                          const Camera::Ptr &c1, 
-                                          const Camera::Ptr &c2,
-                                          double &error);
+  TrianglationResult triangulate(cv::KeyPoint &k1, 
+                                 cv::KeyPoint &k2,
+                                 const Camera::Ptr &c1, 
+                                 const Camera::Ptr &c2);
   // Match the keypoints in two frames.
   std::vector<cv::DMatch> MatchTwoFrames(cv::Mat &img1, 
                                          cv::Mat &img2,
@@ -90,4 +92,5 @@ private:
 };
 
 } // namespace toyslam
+
 #endif // TOYSLAM_VO_FRONTEND_H

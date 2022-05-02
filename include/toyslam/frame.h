@@ -25,14 +25,13 @@ public:
   double time_stamp;
   // Pose in the homogeneous matrix. P_frame = T_frame * P_absolute. 
   Sophus::SE3d pose;              
-  // Stereo images
+  // Left and right images from the stereo camera.
   cv::Mat img_left, img_right;    
-  
   // Features in the left and right image.
   std::vector<Feature> features_left;
   std::vector<Feature> features_right;
-
-
+  
+  // Constructors 
   Frame() = default;
   Frame(unsigned long i, double t, Sophus::SE3d p, 
         cv::Mat& imgl, cv::Mat& imgr): id(i), time_stamp(t){
@@ -40,7 +39,7 @@ public:
         img_left = imgl;
         img_right = imgr;
   }
-
+  // Obtain the next frame.
   static std::shared_ptr<Frame> CreateFrame(){
     static long factory_id = 0;
     Frame::Ptr new_frame(new Frame);

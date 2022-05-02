@@ -24,29 +24,29 @@ bool VOFront::init(){
 int VOFront::run(){
   LOG(INFO) << " VO frontend now start to process the first frame. ";
   while (frame_current_ != nullptr) {
-    LOG(INFO)<< "\n\n\nNow processing the frame no." << frame_current_->id;
+    LOG(INFO)<< "Now processing the frame no." << frame_current_->id;
     
     // Detect and match left and right image from the same frame.
-    VLOG(1)<< "\n\n\nDetecting and matching left and right image from the same frame." ;
+    VLOG(2)<< "Detecting and matching left and right image from the same frame." ;
     frame_current_->features_left = detectAndMatchLR(frame_current_->img_left, 
                                                       frame_current_->img_right);
-    // Go to the next loop. 
+    // Omit the rest for the first frame.  
     if (frame_current_->id == 0) {
       frame_previous_ = frame_current_;
       frame_current_ = data->nextFrame();
       continue;
     }
-    std::vector<cv::DMatch> matches_two_frames;
     
     // Detect and match left images from two consecutive frames.
-    VLOG(1)<< "\n\n\nDetecting and matching left images from two consecutive frames." ;
+    std::vector<cv::DMatch> matches_two_frames;
+    VLOG(2)<< "Detecting and matching left images from two consecutive frames." ;
     matches_two_frames = MatchTwoFrames(frame_current_->img_left, 
                                         frame_previous_->img_left,
                                         frame_current_->features_left, 
                                         frame_previous_->features_left);
     
     // Estimate the pose of the frame.
-    VLOG(1)<< "\n\n\nEstimating the transfrom between two frames." ;
+    VLOG(2)<< "Estimating the transfrom between two frames." ;
     frame_current_->pose =  estimateTransformPnP(frame_current_, 
                                               frame_previous_,
                                               matches_two_frames,
@@ -69,29 +69,24 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
   cv::Ptr<cv::FeatureDetector> detector = cv::ORB::create();
   cv::Ptr<cv::DescriptorExtractor> descriptor = cv::ORB::create();
   cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("BruteForce-Hamming");
-  
   // Detect Oriented FAST corner points.
   detector->detect(img1, kps1);
   detector->detect(img2, kps2);
-  
   // Compute BRIEF descriptors.
   descriptor->compute(img1, kps1, dpts1);
   descriptor->compute(img2, kps2, dpts2);
-  
   // Match the keypoints.
   std::vector<cv::DMatch> matches;
   matcher->match(dpts1, dpts2, matches);
-
   // Check the matched point by its distance to the min distance detected.
   auto min_max = std::minmax_element(matches.begin(), matches.end(),
                                 [](const cv::DMatch &m1, const cv::DMatch &m2) 
                                 { return m1.distance < m2.distance; });
   double min_dist = min_max.first->distance;
   double max_dist = min_max.second->distance;
-  VLOG(3) << "-- Max dist : " << max_dist;
-  VLOG(3) << "-- Min dist : " << min_dist;
-
-  // Reject those twice the size of the min distance. 
+  VLOG(4) << "Max dist in ORB matching (left and right image): " << max_dist;
+  VLOG(4) << "Min dist in ORB matching (left and right image): " << min_dist;
+  // Reject those threefold the size of the min distance. 
   // Use 30 as an emphrical value in case the min distance is too small.
   std::vector<cv::DMatch> good_matches;
   for (int i = 0; i < dpts1.rows; i++) {
@@ -100,9 +95,10 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
     }
   }
   VLOG(2) << "Obatined " << matches.size() << " matches (left and right).";
-  VLOG(2) << "Obatined " << good_matches.size() << " good matches (left and right).";
+  VLOG(1) << "Obatined " << good_matches.size() << " better matches (left and right).";
 
-  // Generate the features.
+  // Generate the features. 
+  // Right now only creat features for left image.
   std::vector<Feature> v;
   for (cv::DMatch m : good_matches) { 
     int i1 = m.queryIdx;
@@ -110,14 +106,18 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
     Feature f(kps1[i1]);
     f.uv << kps1[i1].pt.x, kps1[i1].pt.y;
     double relative_error = 1.0;
-    f.xyz = VOFront::triangulate(kps1[i1], kps2[i2], 
-                                 data->getCamera(0), data->getCamera(1),
-                                 relative_error);
+    TrianglationResult res = VOFront::triangulate(kps1[i1], kps2[i2], 
+                                 data->getCamera(0), data->getCamera(1));
+    f.xyz = res.XYZ;
     // Display the matched pair for debugging.
     if ( diaplay_single_match_ )
       VOFront::displaySingleMatch(img1, img2, kps1[i1], kps2[i2]);
-    if (do_triangulation_rejection_  && (relative_error > reprojection_threshold_))
+    // Check the reprojection of the trianglated point.
+    if (do_triangulation_rejection_ 
+        && (res.relative_error > triangulate_error_threshold_)){
+        VLOG(2) << "Rejected a feature due to large reprojection error.";
         continue;
+    }
     else 
       v.push_back(f);
   }
@@ -139,46 +139,40 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
 }
 
 
-Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1, 
-                                                 cv::KeyPoint &k2,
-                                                 const Camera::Ptr &c1, 
-                                                 const Camera::Ptr &c2,
-                                                 double &relative_error){
+TrianglationResult VOFront::triangulate(cv::KeyPoint &k1, 
+                                        cv::KeyPoint &k2,
+                                        const Camera::Ptr &c1, 
+                                        const Camera::Ptr &c2){
   Eigen::Matrix<double, 3, 1> XYZ;
   Eigen::Matrix<double, 3, 1> uv1;
   Eigen::Matrix<double, 3, 1> uv2;
   uv1 << k1.pt.x, k1.pt.y, 1;
   uv2 << k2.pt.x, k2.pt.y, 1;
+  VLOG(4) << "Pixel location in left image: " << uv1.transpose();
+  VLOG(4) << "Pixel location in right image: " << uv2.transpose();
 
-  // In Kitti, R = I, t = [0, 0.54, 0]
+  // Not retrieving K from camera pose since in Kitti the relation is simple.
+  // In Kitti, R = I, t = [0.54, 0, 0] (camera2 w.r.t camera1)
   Eigen::Matrix<double, 3, 1> t21;
   t21 << 0.54, 0.0, 0.0;  
-  
-  VLOG(5) << "Pixel location in left image: \n" << uv1;
-  VLOG(5) << "Pixel location in right image: \n" << uv2;
-  VLOG(5) << "c1->K_inv: \n" << c1->K_inv;
-  VLOG(5) << "c2->K_inv: \n" << c2->K_inv;
-
+  // Formulate the equation.
   Eigen::Matrix<double, 3, 2> A;
   A << c1->K_inv * uv1, -1 * c2->K_inv * uv2;
   VLOG(4) << "A = \n" << A;
-
   // Solve the least square error, QR method from Eigen.
   Eigen::Matrix<double, 2, 1>  s = A.colPivHouseholderQr().solve(t21);
-  relative_error = (A*s - t21).norm() / t21.norm(); // norm() is L2 norm
+  double relative_error = (A*s - t21).norm() / t21.norm(); // norm() is L2 norm
   // Recover XYZ.
-  double s1_scalar = s(0,0);
-  double s2_scalar = s(1,0);
-
-  if ( s1_scalar < 0 ) LOG(WARNING) << "Depth in left image estimated as negative.";
-  if ( s2_scalar < 0 ) LOG(WARNING) << "Depth in right image estimated as negative.";
-
-  XYZ = s1_scalar * c1->K_inv * uv1;
+  XYZ = s(0,0) * c1->K_inv * uv1;
+  if ( s(0,0) < 0 || s(1,0) < 0 ){
+    VLOG(1) << "Depth estimated as negative.";
+    relative_error = 1.0;
+  }  
   VLOG(3) << "\nFeature point obtained w.r.t the left camera frame: " << XYZ.transpose();
   VLOG(3) << "The relative error in triangulation: " << relative_error;
-  VLOG(3) << "The reprojection error: " <<(uv1 - 1/s1_scalar*c1->K*XYZ).norm();
+  VLOG(3) << "The reprojection error: " <<(uv1 - 1/s(0,0)*c1->K*XYZ).norm();
   
-  return XYZ;
+  return TrianglationResult{XYZ, relative_error};
 }
 
 
@@ -190,28 +184,24 @@ std::vector<cv::DMatch> VOFront::MatchTwoFrames(cv::Mat &img1,
   std::vector<cv::KeyPoint> kps1, kps2;
   for (Feature f : features_curr){ kps1.push_back(f.kp); }
   for (Feature f : features_prev){ kps2.push_back(f.kp); }
-  
+  // Compute BRIEF descriptors.
   cv::Mat dpts1, dpts2;
   cv::Ptr<cv::DescriptorExtractor> descriptor = cv::ORB::create();
   cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("BruteForce-Hamming");
-  
-  // Compute BRIEF descriptors.
   descriptor->compute(img1, kps1, dpts1);
   descriptor->compute(img2, kps2, dpts2);
   // Match the keypoints.
   std::vector<cv::DMatch> matches;
   matcher->match(dpts1, dpts2, matches);
-
   // Check the matched point by its distance to the min distance detected.
   auto min_max = std::minmax_element(matches.begin(), matches.end(),
                                 [](const cv::DMatch &m1, const cv::DMatch &m2) 
                                 { return m1.distance < m2.distance; });
   double min_dist = min_max.first->distance;
   double max_dist = min_max.second->distance;
-  VLOG(3) << "-- Max dist : " << max_dist;
-  VLOG(3) << "-- Min dist : " << min_dist;
-
-  // Reject those twice the size of the min distance. 
+  VLOG(4) << "Max dist in ORB matching (current and previous frame): " << max_dist;
+  VLOG(4) << "Min dist in ORB matching (current and previous frame): " << min_dist;
+  // Reject those triple the size of the min distance. 
   // Use 30 as an emphrical value in case the min distance is too small.
   std::vector<cv::DMatch> good_matches;
   for (int i = 0; i < dpts1.rows; i++) {
@@ -220,7 +210,7 @@ std::vector<cv::DMatch> VOFront::MatchTwoFrames(cv::Mat &img1,
     }
   }
   VLOG(2) << "Obatined " << matches.size() << " matches (two frames).";
-  VLOG(2) << "Obatined " << good_matches.size() << " good matches (two frames).";
+  VLOG(1) << "Obatined " << good_matches.size() << " better matches (two frames).";
 
   // Display the matching result. 
   if ( show_prev_and_curr_matches_ ){
@@ -243,7 +233,8 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
                                            Frame::Ptr &frame_prev,
                                            std::vector<cv::DMatch> matches,
                                            const Camera::Ptr &c_curr){
-  // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing.                                              
+  // Terminate criterion:
+  // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing (N/A yet).                                              
   int iteration_to_terminate = 0;
   // Prepare the camera intrinsic parameters.
   double fx = c_curr->K(0, 0);
@@ -256,12 +247,9 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
   double u1, u2, X, Y, Z_inv;
   Eigen::Matrix<double, 6, 1> epsilon = Eigen::Matrix<double, 6, 1>::Zero();
   Eigen::Matrix<double, 6, 1> epsilon_tmp = Eigen::Matrix<double, 6, 1>::Zero();
-  Eigen::Matrix<double, 6, 1> epsilon_diff = Eigen::Matrix<double, 6, 1>::Zero();
-
   // The transfrom from previous to current: P_curr = T_est * P_prev
   Sophus::SE3d T_est;
 
-  int matches_num = 0;
   for (cv::DMatch m : matches) { 
     int i1 = m.queryIdx;
     int i2 = m.trainIdx;
@@ -275,7 +263,6 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     VLOG(4) << "uv in current frame: " << frame_curr->features_left[i1].uv.transpose();
     VLOG(4) << "uv in previous frame: " << frame_prev->features_left[i2].uv.transpose();
     VLOG(4) << "xyz in previous frame: " << frame_prev->features_left[i2].xyz.transpose();
-    ++matches_num;
   }
 
   Eigen::Matrix<double, 2, 6> delta_transpose;
@@ -284,12 +271,12 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
 
   do{
     ++iter_no;
-    VLOG(2) << "\nGauss-Newton iteration no." << iter_no;
+    VLOG(2) << "Gauss-Newton iteration no." << iter_no;
     VLOG(3) << "Initial transfrom matrix input: \n" << T_est.matrix();
     Eigen::Matrix<double, 6, 6> sum_delta_deltaT = Eigen::Matrix<double, 6, 6>::Zero();
     Eigen::Matrix<double, 6, 1> sum_delta_beta = Eigen::Matrix<double, 6, 1>::Zero();
     double sum_reprojection_error = 0.0;
-    for ( int i = 0; i < matches_num; ++i ){
+    for ( int i = 0; i < matches.size(); ++i ){
       auto TP = T_est*P_list[i];
       // Prepare u and P.
       X = TP(0, 0);
@@ -307,24 +294,22 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;
       sum_delta_deltaT += delta_transpose.transpose()*delta_transpose;
       sum_delta_beta += -delta_transpose.transpose()*beta;
-      sum_reprojection_error += (beta(0,0)*beta(0,0) + beta(1,0)*beta(1,0));
+      sum_reprojection_error += beta.norm()*beta.norm();
     }
-    VLOG(2) << "Total reprojection error with initial value: " << sum_reprojection_error;
-    VLOG(2) << "Average reprojection error for each pair: " 
-              << sum_reprojection_error/matches_num;
+    VLOG(2) << "Total reprojection error before this iteration: " << sum_reprojection_error;
+    VLOG(2) << "Average reprojection error for each pair before this iteration: " 
+              << sum_reprojection_error/matches.size();
 
     // Solve the equation in the least square sense.
     epsilon = sum_delta_deltaT.colPivHouseholderQr().solve(sum_delta_beta);
     double relative_error = (sum_delta_deltaT*epsilon - sum_delta_beta).norm() 
                             / sum_delta_beta.norm(); // norm() is L2 norm
     T_est = Sophus::SE3d::exp(epsilon)*T_est;
-    epsilon_diff = epsilon - epsilon_tmp;
-    epsilon_tmp = epsilon;
-    VLOG(2) << "\nEpsilon (rho phi) in current iteration " << epsilon.transpose();
-    VLOG(3) << "\nTransfrom in current iteration\n " << T_est.matrix();
-    VLOG(4) << "Relative error in current reprojection: " << relative_error;
+    VLOG(2) << "Epsilon (rho phi) in current iteration " << epsilon.transpose();
+    VLOG(3) << "Transfrom in current iteration\n " << T_est.matrix();
+    VLOG(4) << "Relative error in QR decompostion: " << relative_error;
     sum_reprojection_error = 0;
-    for ( int i = 0; i < matches_num; ++i ){
+    for ( int i = 0; i < matches.size(); ++i ){
         auto TP = T_est*P_list[i];
         // Prepare u and P.
         X = TP(0, 0);
@@ -336,14 +321,14 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
         beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;
         sum_reprojection_error += (beta(0,0)*beta(0,0) + beta(1,0)*beta(1,0));
       }
-      VLOG(2) << "Total reprojection error: " << sum_reprojection_error;
-      VLOG(2) << "Average reprojection error for each pair: " 
-                << sum_reprojection_error/matches_num;
+      VLOG(2) << "Total reprojection error after this iteration: " << sum_reprojection_error;
+      VLOG(2) << "Average reprojection error for each pair after this iteration: " 
+                << sum_reprojection_error/matches.size();
 
     // Backtracking?
 
     // Restore T from epsilon and iterate.
-    if ( epsilon_diff.norm() < epsilon_mag_threshold_) iteration_to_terminate = 1;
+    if ( (epsilon - epsilon_tmp).norm() < epsilon_mag_threshold_) iteration_to_terminate = 1;
     if ( iter_no > iteration_times_max_) iteration_to_terminate = 2;
   } while( iteration_to_terminate == 0);
   
@@ -351,9 +336,8 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     case 1 : LOG(INFO)<< "Iteration over due to CONVERGENCE"; break;
     case 2 : LOG(INFO)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
   }
-  // LOG(INFO)<< "\nTransfrom:\n " << T_est.inverse().matrix();
-  // LOG(INFO)<< "\nPose of the camera:\n " << T_est.inverse().matrix();
-  return frame_prev->pose*T_est.inverse(); // Need to confirm.
+  LOG(INFO)<< "Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
+  return frame_prev->pose*T_est.inverse(); 
 }
 
 // Display the matched pair for debugging.

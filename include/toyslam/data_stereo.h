@@ -32,7 +32,7 @@ public:
 private:
   // The path of the dataset. 
   std::string dataset_path_;
-  // Image resize ratio. 
+  // Image resize ratio for image reading. 
   double resize_ratio_ = 1.0;
 
   int current_image_index_ = 0;

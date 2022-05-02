@@ -30,6 +30,7 @@ public:
   // 3D spatial coordinate w.r.t the camera center.
   Eigen::Matrix<double, 3, 1> xyz;
 
+  // Constructors.
   Feature() = default;
   Feature(const cv::KeyPoint &keypoint) : kp(keypoint) {}
 };
