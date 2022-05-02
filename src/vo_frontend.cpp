@@ -4,7 +4,6 @@
 #include <Eigen/Dense>
 #include <boost/format.hpp>
 
-
 #include "toyslam/vo_frontend.h"
 
 namespace toyslam {
@@ -14,25 +13,23 @@ bool VOFront::init(){
   if (data->init())
     LOG(INFO) << "Data loaded. ";
   else 
-    LOG(ERROR) << "Data failed to load. ";
-  
+    LOG(ERROR) << "Data failed to load. "; 
   // Obtain the first frame.
   frame_current_ = data->nextFrame();
   frame_previous_ = frame_current_; 
   assert(frame_current_ != nullptr);
-  
   return true;
 }
 
 int VOFront::run(){
   LOG(INFO) << " VO frontend now start to process the first frame. ";
-
   while (frame_current_ != nullptr) {
-  LOG(INFO)<< "\n\n\nNow processing the frame no." << frame_current_->id;
+    LOG(INFO)<< "\n\n\nNow processing the frame no." << frame_current_->id;
+    
     // Detect and match left and right image from the same frame.
     VLOG(1)<< "\n\n\nDetecting and matching left and right image from the same frame." ;
     frame_current_->features_left = detectAndMatchLR(frame_current_->img_left, 
-                                                     frame_current_->img_right);
+                                                      frame_current_->img_right);
     // Go to the next loop. 
     if (frame_current_->id == 0) {
       frame_previous_ = frame_current_;
@@ -40,9 +37,9 @@ int VOFront::run(){
       continue;
     }
     std::vector<cv::DMatch> matches_two_frames;
+    
     // Detect and match left images from two consecutive frames.
     VLOG(1)<< "\n\n\nDetecting and matching left images from two consecutive frames." ;
-
     matches_two_frames = MatchTwoFrames(frame_current_->img_left, 
                                         frame_previous_->img_left,
                                         frame_current_->features_left, 
@@ -63,11 +60,6 @@ int VOFront::run(){
 
   return 0;
 }
-
-// Sophus::SE3d updatePose();
-// {
-
-// }
 
 std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
   assert(img1.data != nullptr && img2.data != nullptr);
@@ -159,12 +151,11 @@ Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1,
   uv2 << k2.pt.x, k2.pt.y, 1;
 
   // In Kitti, R = I, t = [0, 0.54, 0]
-  // R21 = 
   Eigen::Matrix<double, 3, 1> t21;
   t21 << 0.54, 0.0, 0.0;  
   
-  VLOG(5) << "uv1_mat: \n" << uv1;
-  VLOG(5) << "uv2_mat: \n" << uv2;
+  VLOG(5) << "Pixel location in left image: \n" << uv1;
+  VLOG(5) << "Pixel location in right image: \n" << uv2;
   VLOG(5) << "c1->K_inv: \n" << c1->K_inv;
   VLOG(5) << "c2->K_inv: \n" << c2->K_inv;
 
@@ -185,6 +176,7 @@ Eigen::Matrix<double, 3, 1> VOFront::triangulate(cv::KeyPoint &k1,
   XYZ = s1_scalar * c1->K_inv * uv1;
   VLOG(3) << "\nFeature point obtained w.r.t the left camera frame: " << XYZ.transpose();
   VLOG(3) << "The relative error in triangulation: " << relative_error;
+  VLOG(3) << "The reprojection error: " <<(uv1 - 1/s1_scalar*c1->K*XYZ).norm();
   
   return XYZ;
 }
@@ -251,6 +243,8 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
                                            Frame::Ptr &frame_prev,
                                            std::vector<cv::DMatch> matches,
                                            const Camera::Ptr &c_curr){
+  // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing.                                              
+  int iteration_to_terminate = 0;
   // Prepare the camera intrinsic parameters.
   double fx = c_curr->K(0, 0);
   double fy = c_curr->K(1, 1);
@@ -264,10 +258,9 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
   Eigen::Matrix<double, 6, 1> epsilon_tmp = Eigen::Matrix<double, 6, 1>::Zero();
   Eigen::Matrix<double, 6, 1> epsilon_diff = Eigen::Matrix<double, 6, 1>::Zero();
 
-  // The transfrom from previous to current.
+  // The transfrom from previous to current: P_curr = T_est * P_prev
   Sophus::SE3d T_est;
 
-  std::vector<Feature> v;
   int matches_num = 0;
   for (cv::DMatch m : matches) { 
     int i1 = m.queryIdx;
@@ -275,9 +268,13 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     // Paired feature points' 3D coordinate in prev. frame and 2D in current image.
     u_list.push_back(frame_curr->features_left[i1].uv); 
     P_list.push_back(frame_prev->features_left[i2].xyz);
-    VLOG(3) << "uv in current frame: " << frame_curr->features_left[i1].uv.transpose();
-    VLOG(3) << "uv in previous frame: " << frame_prev->features_left[i2].uv.transpose();
-    VLOG(3) << "xyz in previous frame: " << frame_prev->features_left[i2].xyz.transpose();
+    // To test the algorithm, we can feed in the XYZ of uv1 itself 
+    // and the result should be the identity matrix.
+    // P_list.push_back(frame_curr->features_left[i1].xyz);
+
+    VLOG(4) << "uv in current frame: " << frame_curr->features_left[i1].uv.transpose();
+    VLOG(4) << "uv in previous frame: " << frame_prev->features_left[i2].uv.transpose();
+    VLOG(4) << "xyz in previous frame: " << frame_prev->features_left[i2].xyz.transpose();
     ++matches_num;
   }
 
@@ -288,7 +285,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
   do{
     ++iter_no;
     VLOG(2) << "\nGauss-Newton iteration no." << iter_no;
-    VLOG(3) << "Now the transfrom matrix estiamted as \n" << T_est.matrix();
+    VLOG(3) << "Initial transfrom matrix input: \n" << T_est.matrix();
     Eigen::Matrix<double, 6, 6> sum_delta_deltaT = Eigen::Matrix<double, 6, 6>::Zero();
     Eigen::Matrix<double, 6, 1> sum_delta_beta = Eigen::Matrix<double, 6, 1>::Zero();
     double sum_reprojection_error = 0.0;
@@ -299,19 +296,20 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       Y = TP(1, 0);
       Z_inv = 1.0 / TP(2, 0);
       u1 = u_list[i](0, 0);
-      u2 = u_list[i](0, 0);
+      u2 = u_list[i](1, 0);
       // Calculate delta_m and beta_m.
       // delta_transpose: 6*2 matrix
       delta_transpose << -fx*Z_inv, 0.0, fx*X*Z_inv*Z_inv,
                          fx*X*Y*Z_inv*Z_inv, -fx-fx*X*X*Z_inv*Z_inv, fx*Y*Z_inv,
                          0.0, -fy*Z_inv, fy*Y*Z_inv,
                          fy+fy*Y*Y*Z_inv*Z_inv, -fy*X*Y*Z_inv*Z_inv, -fy*X*Z_inv;
+      // beta: 2*1 matrix
       beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;
       sum_delta_deltaT += delta_transpose.transpose()*delta_transpose;
       sum_delta_beta += -delta_transpose.transpose()*beta;
       sum_reprojection_error += (beta(0,0)*beta(0,0) + beta(1,0)*beta(1,0));
     }
-    VLOG(2) << "Total reprojection error: " << sum_reprojection_error;
+    VLOG(2) << "Total reprojection error with initial value: " << sum_reprojection_error;
     VLOG(2) << "Average reprojection error for each pair: " 
               << sum_reprojection_error/matches_num;
 
@@ -319,21 +317,43 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     epsilon = sum_delta_deltaT.colPivHouseholderQr().solve(sum_delta_beta);
     double relative_error = (sum_delta_deltaT*epsilon - sum_delta_beta).norm() 
                             / sum_delta_beta.norm(); // norm() is L2 norm
-    VLOG(2) << "\nEpsilon (rho phi) in current iteration " << epsilon.transpose();
-    VLOG(3) << "\nTransfrom in current iteration\n " << Sophus::SE3d::exp(epsilon).matrix();
-    VLOG(4) << "Relative error in current reprojection: " << relative_error;
-  
-    // Backtracking?
-
-    // Restore T from epsilon and iterate.
     T_est = Sophus::SE3d::exp(epsilon)*T_est;
     epsilon_diff = epsilon - epsilon_tmp;
     epsilon_tmp = epsilon;
-  } while( epsilon_diff.norm() > epsilon_mag_threshold_);
-  // } while ( iter_no < 10 );
+    VLOG(2) << "\nEpsilon (rho phi) in current iteration " << epsilon.transpose();
+    VLOG(3) << "\nTransfrom in current iteration\n " << T_est.matrix();
+    VLOG(4) << "Relative error in current reprojection: " << relative_error;
+    sum_reprojection_error = 0;
+    for ( int i = 0; i < matches_num; ++i ){
+        auto TP = T_est*P_list[i];
+        // Prepare u and P.
+        X = TP(0, 0);
+        Y = TP(1, 0);
+        Z_inv = 1.0 / TP(2, 0);
+        u1 = u_list[i](0, 0);
+        u2 = u_list[i](0, 0);
+        // Calculate delta_m and beta_m.
+        beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;
+        sum_reprojection_error += (beta(0,0)*beta(0,0) + beta(1,0)*beta(1,0));
+      }
+      VLOG(2) << "Total reprojection error: " << sum_reprojection_error;
+      VLOG(2) << "Average reprojection error for each pair: " 
+                << sum_reprojection_error/matches_num;
+
+    // Backtracking?
+
+    // Restore T from epsilon and iterate.
+    if ( epsilon_diff.norm() < epsilon_mag_threshold_) iteration_to_terminate = 1;
+    if ( iter_no > iteration_times_max_) iteration_to_terminate = 2;
+  } while( iteration_to_terminate == 0);
+  
+  switch(iteration_to_terminate) {
+    case 1 : LOG(INFO)<< "Iteration over due to CONVERGENCE"; break;
+    case 2 : LOG(INFO)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
+  }
   // LOG(INFO)<< "\nTransfrom:\n " << T_est.inverse().matrix();
   // LOG(INFO)<< "\nPose of the camera:\n " << T_est.inverse().matrix();
-  return frame_prev->pose*T_est.inverse(); // Need to reassure.
+  return frame_prev->pose*T_est.inverse(); // Need to confirm.
 }
 
 // Display the matched pair for debugging.

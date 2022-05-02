@@ -48,6 +48,8 @@ private:
   double reprojection_threshold_ = 0.15;
   // Gauss-Newton optimization iteration threshold. 
   double epsilon_mag_threshold_ = 0.0001; 
+  // Gauss-Newton optimization maximal iteration times. 
+  double iteration_times_max_ = 100; 
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;

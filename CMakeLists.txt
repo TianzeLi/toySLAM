@@ -27,6 +27,7 @@ find_package(OpenCV REQUIRED)
 find_package(Sophus REQUIRED)
 find_package(Glog REQUIRED) 
 find_package(gflags REQUIRED)
+find_package(Pangolin REQUIRED)
 
 # Include dirs
 include_directories(
@@ -35,6 +36,7 @@ include_directories(
   ${Sophus_INCLUDE_DIRS}
   ${GLOG_INCLUDE_DIRS}
   ${GFLAGS_INCLUDE_DIRS}
+  ${Pangolin_INCLUDE_DIRS}
 )
 
 # Set link libraries
@@ -45,6 +47,7 @@ list(APPEND LINK_LIBS
   ${fast_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${GFLAGS_LIBRARIES}
+  ${Pangolin_LIBRARIES}
 )
 
 # Set sourcefiles.
@@ -80,3 +83,5 @@ add_executable(test_data_loader test/src/test_data_loader.cpp)
 target_link_libraries(test_data_loader ${LINK_LIBS} toyslam)
 add_executable(test_vo_frontend test/src/test_vo_frontend.cpp)
 target_link_libraries(test_vo_frontend ${LINK_LIBS} toyslam)
+add_executable(evaluate_trajectory test/src/evaluate_trajectory.cpp)
+target_link_libraries(evaluate_trajectory ${LINK_LIBS} toyslam)
