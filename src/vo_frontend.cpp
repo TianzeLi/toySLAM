@@ -3,6 +3,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <Eigen/Dense>
 #include <boost/format.hpp>
+#include <random>
+#include <chrono> 
 
 #include "toyslam/vo_frontend.h"
 
@@ -48,9 +50,9 @@ int VOFront::run(){
     // Estimate the pose of the frame.
     VLOG(2)<< "Estimating the transfrom between two frames." ;
     frame_current_->pose =  estimateTransformPnP(frame_current_, 
-                                              frame_previous_,
-                                              matches_two_frames,
-                                              data->getCamera(0));
+                                                 frame_previous_,
+                                                 matches_two_frames,
+                                                 data->getCamera(0));
     pose = frame_current_->pose;
     LOG(INFO) << " VO frontend at pose: \n" << pose.matrix();
 
@@ -226,29 +228,17 @@ std::vector<cv::DMatch> VOFront::MatchTwoFrames(cv::Mat &img1,
   }
   
   return good_matches;
-  }
+}
 
 // Estiamte the transform from corresponding features.
 Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr, 
                                            Frame::Ptr &frame_prev,
                                            std::vector<cv::DMatch> matches,
                                            const Camera::Ptr &c_curr){
-  // Terminate criterion:
-  // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing (N/A yet).                                              
-  int iteration_to_terminate = 0;
-  // Prepare the camera intrinsic parameters.
-  double fx = c_curr->K(0, 0);
-  double fy = c_curr->K(1, 1);
-  double cx = c_curr->K(0, 2);
-  double cy = c_curr->K(1, 2);
+  Sophus::SE3d T_est;
   // Create the matched point pair lists.
   std::vector<Eigen::Matrix<double, 2, 1>> u_list;
   std::vector<Eigen::Matrix<double, 3, 1>> P_list;
-  double u1, u2, X, Y, Z_inv;
-  Eigen::Matrix<double, 6, 1> epsilon = Eigen::Matrix<double, 6, 1>::Zero();
-  Eigen::Matrix<double, 6, 1> epsilon_tmp = Eigen::Matrix<double, 6, 1>::Zero();
-  // The transfrom from previous to current: P_curr = T_est * P_prev
-  Sophus::SE3d T_est;
 
   for (cv::DMatch m : matches) { 
     int i1 = m.queryIdx;
@@ -264,19 +254,102 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     VLOG(4) << "uv in previous frame: " << frame_prev->features_left[i2].uv.transpose();
     VLOG(4) << "xyz in previous frame: " << frame_prev->features_left[i2].xyz.transpose();
   }
+  // Without RANSAC
+  T_est = Gauss_Newton(u_list, P_list, c_curr);
+  VLOG(1) << "(Without RANSAC) Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
+  
+  // RANSAC
+  if (do_RANSAC_){
+    double threshold = sin(reprojection_angle_threshold_);
+    int count = 0;
+    std::vector<Sophus::SE3d> T_list;
+    std::vector<int> count_list;
+    for (int i = 0; i <= RANSAC_iteration_times_; ++i ){
+      std::vector<Eigen::Matrix<double, 2, 1>> u_list_est;
+      std::vector<Eigen::Matrix<double, 3, 1>> P_list_est;
+      std::vector<int> k_list;
+      // Randomly select s pairs of correspondencs.
+      std::random_device rd; // obtain a random number from hardware
+      std::mt19937 gen(rd()); // seed the generator
+      std::uniform_int_distribution<> distr(0, u_list.size()-1); // define the range
+      for (int j = 0; j < amount_pairs_; ++j){
+        int k = distr(gen);
+        // To avoid drawing the same pair.
+        if( std::find(k_list.begin(), k_list.end(), k) == k_list.end() ){
+          // VLOG(1) << "Got random number k: " << k;
+          k_list.push_back(k);
+          u_list_est.push_back(u_list.at(k));
+          P_list_est.push_back(P_list.at(k));
+        }
+        else {
+          --j;
+          continue;  
+        }
+      }
+      // VLOG(1) << "u_list length to draw estimation: " << u_list_est.size();
+      // VLOG(1) << "P_list length to draw estimation: " << P_list_est.size();
 
+      // Estimate the transform based on selected pairs.
+      auto T_tmp = Gauss_Newton(u_list_est, P_list_est, c_curr);
+      // Iterate throught the other pairs to see how many carries small enough error.
+      count = 0;
+      for (int j = 0; j < u_list.size(); ++j ) {
+        if( std::find(k_list.begin(), k_list.end(), j) == k_list.end() ) {
+          double err = computeReprojectionAngleError(u_list.at(j), P_list.at(j), 
+                                                     T_tmp.matrix3x4(), c_curr->K_inv);
+        VLOG(1) << "Reprojection angle error " << err;
+        if ( abs(err) < threshold ) ++count;
+      }
+      // Store the result of one iteration.
+      T_list.push_back(T_tmp);
+      count_list.push_back(count);
+      }
+      VLOG(1) << "Has got " << count << " inliers out of " 
+              << u_list.size() - amount_pairs_;  
+    }
+
+    // Find the index i that has the most counts.
+    int i_max_count = std::distance(count_list.begin(), std::max_element(count_list.begin(),count_list.end()));
+    VLOG(1)<< "Estimation no. " << i_max_count << " has the most counts"
+            << count_list[i_max_count] << " out of " << u_list.size() - amount_pairs_;
+    T_est = T_list[i_max_count]; 
+    VLOG(1)<< "(RANSAC) Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
+  }
+
+  LOG(INFO)<< "Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
+  return frame_prev->pose*T_est.inverse(); 
+}
+
+Sophus::SE3d VOFront::Gauss_Newton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
+                                   std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
+                                   const Camera::Ptr &c_curr){
+
+  // Terminate criterion:
+  // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing (N/A yet).                                              
+  int iteration_to_terminate = 0;
+  // Prepare the camera intrinsic parameters.
+  double fx = c_curr->K(0, 0);
+  double fy = c_curr->K(1, 1);
+  double cx = c_curr->K(0, 2);
+  double cy = c_curr->K(1, 2);
+  double u1, u2, X, Y, Z_inv;
+  Eigen::Matrix<double, 6, 1> epsilon = Eigen::Matrix<double, 6, 1>::Zero();
+  Eigen::Matrix<double, 6, 1> epsilon_tmp = Eigen::Matrix<double, 6, 1>::Zero();
+  // The transfrom from previous to current: P_curr = T_est * P_prev
+  Sophus::SE3d T_est;
   Eigen::Matrix<double, 2, 6> delta_transpose;
   Eigen::Matrix<double, 2, 1> beta;  
   int iter_no = 0;
 
   do{
+    assert( u_list.size() == P_list.size() );
     ++iter_no;
-    VLOG(2) << "Gauss-Newton iteration no." << iter_no;
+    VLOG(3) << "Gauss-Newton iteration no." << iter_no;
     VLOG(3) << "Initial transfrom matrix input: \n" << T_est.matrix();
     Eigen::Matrix<double, 6, 6> sum_delta_deltaT = Eigen::Matrix<double, 6, 6>::Zero();
     Eigen::Matrix<double, 6, 1> sum_delta_beta = Eigen::Matrix<double, 6, 1>::Zero();
     double sum_reprojection_error = 0.0;
-    for ( int i = 0; i < matches.size(); ++i ){
+    for ( int i = 0; i < u_list.size(); ++i ){
       auto TP = T_est*P_list[i];
       // Prepare u and P.
       X = TP(0, 0);
@@ -296,48 +369,64 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       sum_delta_beta += -delta_transpose.transpose()*beta;
       sum_reprojection_error += beta.norm()*beta.norm();
     }
-    VLOG(2) << "Total reprojection error before this iteration: " << sum_reprojection_error;
-    VLOG(2) << "Average reprojection error for each pair before this iteration: " 
-              << sum_reprojection_error/matches.size();
+    VLOG(3) << "Total reprojection error before this iteration: " << sum_reprojection_error;
+    VLOG(3) << "Average reprojection error for each pair before this iteration: " 
+              << sum_reprojection_error/u_list.size();
 
     // Solve the equation in the least square sense.
     epsilon = sum_delta_deltaT.colPivHouseholderQr().solve(sum_delta_beta);
     double relative_error = (sum_delta_deltaT*epsilon - sum_delta_beta).norm() 
                             / sum_delta_beta.norm(); // norm() is L2 norm
     T_est = Sophus::SE3d::exp(epsilon)*T_est;
-    VLOG(2) << "Epsilon (rho phi) in current iteration " << epsilon.transpose();
+    VLOG(3) << "Epsilon (rho phi) in current iteration " << epsilon.transpose();
     VLOG(3) << "Transfrom in current iteration\n " << T_est.matrix();
     VLOG(4) << "Relative error in QR decompostion: " << relative_error;
-    sum_reprojection_error = 0;
-    for ( int i = 0; i < matches.size(); ++i ){
+    sum_reprojection_error = 0.0;
+    for ( int i = 0; i < u_list.size(); ++i ){
         auto TP = T_est*P_list[i];
         // Prepare u and P.
         X = TP(0, 0);
         Y = TP(1, 0);
         Z_inv = 1.0 / TP(2, 0);
         u1 = u_list[i](0, 0);
-        u2 = u_list[i](0, 0);
+        u2 = u_list[i](1, 0);
         // Calculate delta_m and beta_m.
         beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;
-        sum_reprojection_error += (beta(0,0)*beta(0,0) + beta(1,0)*beta(1,0));
-      }
-      VLOG(2) << "Total reprojection error after this iteration: " << sum_reprojection_error;
-      VLOG(2) << "Average reprojection error for each pair after this iteration: " 
-                << sum_reprojection_error/matches.size();
+        sum_reprojection_error += beta.norm()*beta.norm();
+    }
+    VLOG(3) << "Total reprojection error after this iteration: " << sum_reprojection_error;
+    VLOG(3) << "Average reprojection error for each pair after this iteration: " 
+            << sum_reprojection_error/u_list.size();
 
     // Backtracking?
 
     // Restore T from epsilon and iterate.
     if ( (epsilon - epsilon_tmp).norm() < epsilon_mag_threshold_) iteration_to_terminate = 1;
-    if ( iter_no > iteration_times_max_) iteration_to_terminate = 2;
+    if ( iter_no > GN_iteration_times_max_) iteration_to_terminate = 2;
   } while( iteration_to_terminate == 0);
   
   switch(iteration_to_terminate) {
-    case 1 : LOG(INFO)<< "Iteration over due to CONVERGENCE"; break;
-    case 2 : LOG(INFO)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
+    case 1 : VLOG(2)<< "Iteration over due to CONVERGENCE"; break;
+    case 2 : VLOG(2)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
   }
-  LOG(INFO)<< "Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
-  return frame_prev->pose*T_est.inverse(); 
+  return T_est;
+}
+
+double VOFront::computeReprojectionAngleError(Eigen::Matrix<double, 2, 1> u, 
+                                              Eigen::Matrix<double, 3, 1> P, 
+                                              Eigen::Matrix<double, 3, 4> T, 
+                                              Eigen::Matrix<double, 3, 3> K_inv){
+  Eigen::Matrix<double, 3, 1> u_homogenerous;
+  u_homogenerous << u(0,0), u(1,0), 1.0;
+  Eigen::Matrix<double, 4, 1> P_homogenerous; 
+  P_homogenerous << P(0,0), P(1,0), P(2,0), 1.0;
+  Eigen::Matrix<double, 3, 1> t;
+  t << T(0,3), T(1,3), T(2,3);
+
+  Eigen::Matrix<double, 3, 1> vec1 = K_inv * u_homogenerous;
+  Eigen::Matrix<double, 3, 1> vec2 = t.cross(T*P_homogenerous);
+
+  return vec1.dot(vec2)/vec1.norm()/vec2.norm(); 
 }
 
 // Display the matched pair for debugging.

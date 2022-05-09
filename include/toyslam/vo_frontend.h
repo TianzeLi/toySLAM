@@ -50,9 +50,17 @@ private:
   // Triangulation reprojection error threshold.
   double triangulate_error_threshold_ = 0.15;
   // Gauss-Newton optimization iteration threshold. 
-  double epsilon_mag_threshold_ = 0.0001; 
+  double epsilon_mag_threshold_ = 0.001; 
   // Gauss-Newton optimization maximal iteration times. 
-  double iteration_times_max_ = 100; 
+  double GN_iteration_times_max_ = 60; 
+  // If true, do RANSAC during the estimation.
+  bool do_RANSAC_ = true;
+  // RANSAC iteration times, equations in VO Tutorial.
+  int RANSAC_iteration_times_ = 50;
+  // RANSAC amounts of pairs for estimation in each iteration.
+  int amount_pairs_ = 5;
+  // RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
+  double reprojection_angle_threshold_ = 0.005; 
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;
@@ -67,6 +75,7 @@ private:
 
   // Detect and match left and right image from the same frame.
   std::vector<Feature> detectAndMatchLR(cv::Mat &img1, cv::Mat &img2);
+
   // Triangulate the matched point from two images and compute the XYZ w.r.t frame 1.
   TrianglationResult triangulate(cv::KeyPoint &k1, 
                                  cv::KeyPoint &k2,
@@ -83,6 +92,16 @@ private:
                                     Frame::Ptr &frame_prev,
                                     std::vector<cv::DMatch> match_two_frames,
                                     const Camera::Ptr &c_curr);
+  
+  // Gauss-Newton iteration on P-n-P.
+  Sophus::SE3d Gauss_Newton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
+                            std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
+                            const Camera::Ptr &c_curr);
+
+  double computeReprojectionAngleError(Eigen::Matrix<double, 2, 1> u, 
+                                       Eigen::Matrix<double, 3, 1> P, 
+                                       Eigen::Matrix<double, 3, 4> T, 
+                                       Eigen::Matrix<double, 3, 3> K_inv);
 
   // Display the matched pair for debugging.
   void displaySingleMatch(cv::Mat &img1, 
