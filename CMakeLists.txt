@@ -54,6 +54,7 @@ list(APPEND LINK_LIBS
 list(APPEND SOURCEFILES
   src/data_stereo.cpp
   src/vo_frontend.cpp
+  src/vo_ba.cpp
 )
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
@@ -85,3 +86,5 @@ add_executable(test_vo_frontend test/src/test_vo_frontend.cpp)
 target_link_libraries(test_vo_frontend ${LINK_LIBS} toyslam)
 add_executable(evaluate_trajectory test/src/evaluate_trajectory.cpp)
 target_link_libraries(evaluate_trajectory ${LINK_LIBS} toyslam)
+add_executable(test_vo test/src/test_vo.cpp)
+target_link_libraries(test_vo ${LINK_LIBS} toyslam)

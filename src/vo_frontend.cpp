@@ -11,11 +11,6 @@
 namespace toyslam {
 
 bool VOFront::init(){
-  data = DataStereo::Ptr(new DataStereo(dataset_path_));
-  if (data->init())
-    LOG(INFO) << "Data loaded. ";
-  else 
-    LOG(ERROR) << "Data failed to load. "; 
   // Obtain the first frame.
   frame_current_ = data->nextFrame();
   frame_previous_ = frame_current_; 
@@ -56,6 +51,9 @@ int VOFront::run(){
     pose = frame_current_->pose;
     LOG(INFO) << " VO frontend at pose: \n" << pose.matrix();
 
+    if ( do_bundle_adjustment_ ) registerFrame2BA(frame_current_);
+    VLOG(1) << "VO bundle adjustment now has " << bundle_adjustment_->frames_.size()
+                                               << " frames.";
     frame_previous_ = frame_current_;
     frame_current_ = data->nextFrame();
     // Compute the time used for this frame. 
@@ -262,7 +260,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
     VLOG(4) << "xyz in previous frame: " << frame_prev->features_left[i2].xyz.transpose();
   }
   // Without RANSAC
-  T_est = Gauss_Newton(u_list, P_list, c_curr);
+  T_est = GaussNewton(u_list, P_list, c_curr);
   VLOG(1) << "(Without RANSAC) Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
   
   // RANSAC
@@ -297,7 +295,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       // VLOG(1) << "P_list length to draw estimation: " << P_list_est.size();
 
       // Estimate the transform based on selected pairs.
-      auto T_tmp = Gauss_Newton(u_list_est, P_list_est, c_curr);
+      auto T_tmp = GaussNewton(u_list_est, P_list_est, c_curr);
       // Iterate throught the other pairs to see how many carries small enough error.
       count = 0;
       std::vector<int> in_list_tmp; 
@@ -334,7 +332,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
             P_list_in.push_back(P_list.at(n));
           }
     }
-    T_est = Gauss_Newton(u_list_in, P_list_in, c_curr);
+    T_est = GaussNewton(u_list_in, P_list_in, c_curr);
 
     VLOG(1)<< "(RANSAC) Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
   }
@@ -343,9 +341,9 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
   return frame_prev->pose*T_est.inverse(); 
 }
 
-Sophus::SE3d VOFront::Gauss_Newton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
-                                   std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
-                                   const Camera::Ptr &c_curr){
+Sophus::SE3d VOFront::GaussNewton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
+                                  std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
+                                  const Camera::Ptr &c_curr){
 
   // Terminate criterion:
   // 1 - Converge; 2 - Reached max iter. times; 3 - Cost function incresing (N/A yet).                                              
@@ -477,6 +475,11 @@ void VOFront::displaySingleMatch(cv::Mat &img1,
             cv::Scalar(255, 128, 0), 3 );
   cv::imshow("Good matches between frames", img_match);
   cv::waitKey(0);
+}
+
+  // Register a frame with BA.
+void VOFront::registerFrame2BA(Frame::Ptr frame){
+  bundle_adjustment_->appendFrame(frame);
 }
 
 } // namespace toyslam

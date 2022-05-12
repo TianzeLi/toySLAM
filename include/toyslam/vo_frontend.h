@@ -18,6 +18,7 @@
 #include "toyslam/camera.h"
 #include "toyslam/data_stereo.h"
 #include "toyslam/feature.h"
+#include "toyslam/vo_ba.h"
 
 namespace toyslam{
 
@@ -30,44 +31,55 @@ public:
   Sophus::SE3d pose;
 
   VOFront() = default;
-  VOFront(std::string path) : dataset_path_(path) {};
+  VOFront(DataStereo::Ptr dataset) : data(dataset) {};
   
   // Initialize the frontend.
   bool init();
   // Run the frontend.
   int run();
 
+  // Compute the pose.
   Sophus::SE3d updatePose();
+
+  // Register the frontend with BA.
+  void resigterBA(VOBA::Ptr ba) { bundle_adjustment_ = ba; };
 
 
 private:
-  std::string dataset_path_;
   // State of the VO frontend.
   unsigned state_ = 0;
-
+  // Triangulation. 
   // If true, use triangulation reprojection error to reject mismatches.
   bool do_triangulation_rejection_ = true;
   // Triangulation reprojection error threshold.
   double triangulate_error_threshold_ = 0.15;
+  // Gauss-Newton
   // Gauss-Newton optimization iteration threshold. 
   double epsilon_mag_threshold_ = 0.001; 
   // Gauss-Newton optimization maximal iteration times. 
   double GN_iteration_times_max_ = 60; 
+  // RANSAC
   // If true, do RANSAC during the estimation.
   bool do_RANSAC_ = true;
   // RANSAC iteration times, equations in VO Tutorial.
-  int RANSAC_iteration_times_ = 40;
+  int RANSAC_iteration_times_ = 20;
   // RANSAC amounts of pairs for estimation in each iteration.
-  int amount_pairs_ = 4;
+  int amount_pairs_ = 7;
   // RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
   double reprojection_angle_threshold_ = 0.001; 
+  // Bundle adjustment.
+  bool do_bundle_adjustment_ = true;
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;
   bool show_prev_and_curr_matches_ = false;
   bool diaplay_single_match_ = false;
 
+  // Pointer to the dataset.
   DataStereo::Ptr data = nullptr;
+
+  // Pointer to the bundle adjustment.
+  VOBA::Ptr bundle_adjustment_;
 
   // Pointer to the current frame
   Frame::Ptr frame_current_ = nullptr;
@@ -81,6 +93,7 @@ private:
                                  cv::KeyPoint &k2,
                                  const Camera::Ptr &c1, 
                                  const Camera::Ptr &c2);
+  
   // Match the keypoints in two frames.
   std::vector<cv::DMatch> MatchTwoFrames(cv::Mat &img1, 
                                          cv::Mat &img2,
@@ -94,9 +107,9 @@ private:
                                     const Camera::Ptr &c_curr);
   
   // Gauss-Newton iteration on P-n-P.
-  Sophus::SE3d Gauss_Newton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
-                            std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
-                            const Camera::Ptr &c_curr);
+  Sophus::SE3d GaussNewton(std::vector<Eigen::Matrix<double, 2, 1>> &u_list,
+                           std::vector<Eigen::Matrix<double, 3, 1>> &P_list,
+                           const Camera::Ptr &c_curr);
 
   double computeReprojectionAngleError(Eigen::Matrix<double, 2, 1> u, 
                                        Eigen::Matrix<double, 3, 1> P, 
@@ -108,6 +121,9 @@ private:
                           cv::Mat &img2,
                           cv::KeyPoint &k1, 
                           cv::KeyPoint &k2);
+
+  // Register a frame with BA.
+  void registerFrame2BA(Frame::Ptr frame);
 };
 
 } // namespace toyslam

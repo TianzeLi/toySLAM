@@ -16,8 +16,7 @@
 
 namespace toyslam {
 
-class Feature 
-{
+class Feature { 
 typedef std::shared_ptr<Feature> Ptr;
 
 public:
