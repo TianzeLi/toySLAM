@@ -56,15 +56,15 @@ private:
   // If true, do RANSAC during the estimation.
   bool do_RANSAC_ = true;
   // RANSAC iteration times, equations in VO Tutorial.
-  int RANSAC_iteration_times_ = 50;
+  int RANSAC_iteration_times_ = 40;
   // RANSAC amounts of pairs for estimation in each iteration.
-  int amount_pairs_ = 5;
+  int amount_pairs_ = 4;
   // RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
-  double reprojection_angle_threshold_ = 0.005; 
+  double reprojection_angle_threshold_ = 0.001; 
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;
-  bool show_prev_and_curr_matches_ = true;
+  bool show_prev_and_curr_matches_ = false;
   bool diaplay_single_match_ = false;
 
   DataStereo::Ptr data = nullptr;

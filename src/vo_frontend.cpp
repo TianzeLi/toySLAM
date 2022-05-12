@@ -27,7 +27,7 @@ int VOFront::run(){
   LOG(INFO) << " VO frontend now start to process the first frame. ";
   while (frame_current_ != nullptr) {
     LOG(INFO)<< "Now processing the frame no." << frame_current_->id;
-    
+    auto t1 = std::chrono::steady_clock::now();
     // Detect and match left and right image from the same frame.
     VLOG(2)<< "Detecting and matching left and right image from the same frame." ;
     frame_current_->features_left = detectAndMatchLR(frame_current_->img_left, 
@@ -58,6 +58,11 @@ int VOFront::run(){
 
     frame_previous_ = frame_current_;
     frame_current_ = data->nextFrame();
+    // Compute the time used for this frame. 
+    auto t2 = std::chrono::steady_clock::now();
+    auto time_used =
+        std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+    LOG(INFO) << "Frame costed time: " << time_used.count() << " seconds.";
   }
 
   return 0;
@@ -88,11 +93,13 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
   double max_dist = min_max.second->distance;
   VLOG(4) << "Max dist in ORB matching (left and right image): " << max_dist;
   VLOG(4) << "Min dist in ORB matching (left and right image): " << min_dist;
-  // Reject those threefold the size of the min distance. 
-  // Use 30 as an emphrical value in case the min distance is too small.
+  // Reject those forthfold the size of the min distance. 
+  // Use 40 as an emphrical value in case the min distance is too small.
+  // In the left and right matching, we would like to admit more correspondences
+  // thus lead to a less strict criterion. 
   std::vector<cv::DMatch> good_matches;
   for (int i = 0; i < dpts1.rows; i++) {
-    if (matches[i].distance <= std::max(3 * min_dist, 30.0)) {
+    if (matches[i].distance <= std::max(4 * min_dist, 40.0)) {
       good_matches.push_back(matches[i]);
     }
   }
@@ -117,7 +124,7 @@ std::vector<Feature> VOFront::detectAndMatchLR(cv::Mat &img1, cv::Mat &img2) {
     // Check the reprojection of the trianglated point.
     if (do_triangulation_rejection_ 
         && (res.relative_error > triangulate_error_threshold_)){
-        VLOG(2) << "Rejected a feature due to large reprojection error.";
+        VLOG(3) << "Rejected a feature due to large reprojection error.";
         continue;
     }
     else 
@@ -262,7 +269,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
   if (do_RANSAC_){
     double threshold = sin(reprojection_angle_threshold_);
     int count = 0;
-    std::vector<Sophus::SE3d> T_list;
+    std::vector<std::vector<int>> inliner_list;
     std::vector<int> count_list;
     for (int i = 0; i <= RANSAC_iteration_times_; ++i ){
       std::vector<Eigen::Matrix<double, 2, 1>> u_list_est;
@@ -293,26 +300,42 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       auto T_tmp = Gauss_Newton(u_list_est, P_list_est, c_curr);
       // Iterate throught the other pairs to see how many carries small enough error.
       count = 0;
+      std::vector<int> in_list_tmp; 
       for (int j = 0; j < u_list.size(); ++j ) {
         if( std::find(k_list.begin(), k_list.end(), j) == k_list.end() ) {
           double err = computeReprojectionAngleError(u_list.at(j), P_list.at(j), 
                                                      T_tmp.matrix3x4(), c_curr->K_inv);
-        VLOG(1) << "Reprojection angle error " << err;
-        if ( abs(err) < threshold ) ++count;
+          VLOG(3) << "Reprojection angle error " << err;
+          if ( abs(err) < threshold ) {
+            ++count;
+            in_list_tmp.push_back(j);
+          }
+        }
+        else in_list_tmp.push_back(j);
       }
       // Store the result of one iteration.
-      T_list.push_back(T_tmp);
+      inliner_list.push_back(in_list_tmp);
       count_list.push_back(count);
-      }
-      VLOG(1) << "Has got " << count << " inliers out of " 
+      VLOG(3) << "Has got " << count << " inliers out of " 
               << u_list.size() - amount_pairs_;  
     }
 
     // Find the index i that has the most counts.
     int i_max_count = std::distance(count_list.begin(), std::max_element(count_list.begin(),count_list.end()));
-    VLOG(1)<< "Estimation no. " << i_max_count << " has the most counts"
+    VLOG(1)<< "Estimation no. " << i_max_count << " has the most counts: "
             << count_list[i_max_count] << " out of " << u_list.size() - amount_pairs_;
-    T_est = T_list[i_max_count]; 
+    std::vector<Eigen::Matrix<double, 2, 1>> u_list_in;
+    std::vector<Eigen::Matrix<double, 3, 1>> P_list_in;
+    std::vector<int> inliner_est = inliner_list[i_max_count];
+    VLOG(1) << "To estimate from " << inliner_est.size() << " pairs"; 
+    for (int n = 0; n < u_list.size(); ++n){
+      if( std::find(inliner_est.begin(), inliner_est.end(), n) != inliner_est.end() ){
+            u_list_in.push_back(u_list.at(n));
+            P_list_in.push_back(P_list.at(n));
+          }
+    }
+    T_est = Gauss_Newton(u_list_in, P_list_in, c_curr);
+
     VLOG(1)<< "(RANSAC) Estimated transfrom between last two frames: \n " << T_est.inverse().matrix();
   }
 
@@ -406,8 +429,8 @@ Sophus::SE3d VOFront::Gauss_Newton(std::vector<Eigen::Matrix<double, 2, 1>> &u_l
   } while( iteration_to_terminate == 0);
   
   switch(iteration_to_terminate) {
-    case 1 : VLOG(2)<< "Iteration over due to CONVERGENCE"; break;
-    case 2 : VLOG(2)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
+    case 1 : VLOG(3)<< "Iteration over due to CONVERGENCE"; break;
+    case 2 : VLOG(3)<< "Iteration over due to MAXIMAL ITERATION TIMES REACHED";
   }
   return T_est;
 }
