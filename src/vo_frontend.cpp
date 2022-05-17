@@ -5,6 +5,8 @@
 #include <boost/format.hpp>
 #include <random>
 #include <chrono> 
+#include <iostream>
+#include <fstream>
 
 #include "toyslam/vo_frontend.h"
 
@@ -20,6 +22,11 @@ bool VOFront::init(){
 
 int VOFront::run(){
   LOG(INFO) << " VO frontend now start to process the first frame. ";
+  std::ofstream outfile;
+  if ( write_est_to_file ) {
+    outfile.open(outfile_path);
+    outfile << "1 0 0 0 0 1 0 0 0 0 1 0" << std::endl;
+  }
   while (frame_current_ != nullptr) {
     LOG(INFO)<< "Now processing the frame no." << frame_current_->id;
     auto t1 = std::chrono::steady_clock::now();
@@ -50,10 +57,17 @@ int VOFront::run(){
                                                  data->getCamera(0));
     pose = frame_current_->pose;
     LOG(INFO) << " VO frontend at pose: \n" << pose.matrix();
+    if ( write_est_to_file ) {
+      auto p = pose.matrix();
+      assert(outfile.is_open());
+      outfile << p(0,0) << " " << p(0,1) << " " << p(0,2) << " " << p(0,3) << " "
+              << p(1,0) << " " << p(1,1) << " " << p(1,2) << " " << p(1,3) << " "
+              << p(2,0) << " " << p(2,1) << " " << p(2,2) << " " << p(2,3) << std::endl;
+    }
 
     if ( do_bundle_adjustment_ ) registerFrame2BA(frame_current_);
     VLOG(1) << "VO bundle adjustment now has " << bundle_adjustment_->frames_.size()
-                                               << " frames.";
+            << " frames.";
     frame_previous_ = frame_current_;
     frame_current_ = data->nextFrame();
     // Compute the time used for this frame. 
@@ -63,6 +77,7 @@ int VOFront::run(){
     LOG(INFO) << "Frame costed time: " << time_used.count() << " seconds.";
   }
 
+  if ( write_est_to_file ) outfile.close();
   return 0;
 }
 

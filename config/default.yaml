@@ -1,13 +1,36 @@
 %YAML:1.0
-# data
-dataset_dir: //home/tianze/Downloads/KittiBenchmark/data_odometry_gray/dataset/sequences/00
+# data input
+dataset_dir: /home/tianze/toySLAM/test/data/00
+# dataset_dir: /home/tianze/Downloads/KittiBenchmark/data_odometry_gray/dataset/sequences/00
 
-# camera intrinsics
-camera.fx: 517.3
-camera.fy: 516.5
-camera.cx: 325.1
-camera.cy: 249.7
+# Front end
+# Triangulation. 
+# If true, use triangulation reprojection error to reject mismatches.
+# do_triangulation_rejection: true
+# Triangulation reprojection error threshold.
+# triangulate_error_threshold: 0.15;
+# Gauss-Newton
+# Gauss-Newton optimization iteration threshold. 
+# epsilon_mag_threshold: 0.001; 
+# Gauss-Newton optimization maximal iteration times. 
+# GN_iteration_times_max: 60; 
+# RANSAC
+# If true, do RANSAC during the estimation.
+do_RANSAC: false
+# RANSAC iteration times, equations in VO Tutorial.
+# int RANSAC_iteration_times: 20;
+# RANSAC amounts of pairs for estimation in each iteration.
+# amount_pairs: 7;
+# RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
+# double reprojection_angle_threshold: 0.001
+# Bundle adjustment.
+do_bundle_adjustment: false
+# If true, write estimation to an output file.
+write_est_to_file: true
+outfile_path: /home/tianze/toySLAM/bin/00_est.txt
+groundtruth_file_path: /home/tianze/toySLAM/test/data/00.txt
 
-num_features: 150
-num_features_init: 50
-num_features_tracking: 50
+# Display images settings.
+# show_left_and_right_matches: false
+# show_prev_and_curr_matches: false
+# diaplay_single_match: false

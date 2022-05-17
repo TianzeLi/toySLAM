@@ -27,9 +27,6 @@ struct TrianglationResult {Eigen::Matrix<double, 3, 1> XYZ; double relative_erro
 
 class VOFront {
 public:
-  // The estimated pose of the left camera center.
-  Sophus::SE3d pose;
-
   VOFront() = default;
   VOFront(DataStereo::Ptr dataset) : data(dataset) {};
   
@@ -44,8 +41,16 @@ public:
   // Register the frontend with BA.
   void resigterBA(VOBA::Ptr ba) { bundle_adjustment_ = ba; };
 
+  // Parameter setting interfaces for configuration. 
+  void set_do_RANSAC(std::string s) { std::istringstream(s) >> do_RANSAC_ ; }
+  void set_outfile_path(std::string s) { outfile_path = s; }
+
+  // The estimated pose of the left camera center.
+  Sophus::SE3d pose;
 
 private:
+  // Configuration file path.
+  std::string config_file_path_;
   // State of the VO frontend.
   unsigned state_ = 0;
   // Triangulation. 
@@ -68,7 +73,10 @@ private:
   // RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
   double reprojection_angle_threshold_ = 0.001; 
   // Bundle adjustment.
-  bool do_bundle_adjustment_ = true;
+  bool do_bundle_adjustment_ = false;
+  // If true, write estimation to an output file.
+  bool write_est_to_file = true;
+  std::string outfile_path = "/home/tianze/toySLAM/bin/00_est.txt";
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;

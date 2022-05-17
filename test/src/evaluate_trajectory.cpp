@@ -1,120 +1,19 @@
-/**
- * @file compute_estimation_error.cpp
- * @author Tianze Li (tianze.li.eu@gmail.com)
- * @brief Compute the RMSE error against the ground truth.
- *        Code adapted from slambook.
- * @version 0.1
- * @date 2022-04-30
- * 
- * @copyright Copyright (c) 2022
- * 
- */
+#include "toyslam/evaluate_trajectory.h"
+#include "toyslam/config.h"
 
-#include <iostream>
-#include <fstream>
-#include <unistd.h>
-#include <pangolin/pangolin.h>
-#include <sophus/se3.hpp>
-#include <Eigen/Core>
-
-
-using namespace Sophus;
+using namespace toyslam;
 using namespace std;
 
-string groundtruth_file = "/home/tianze/toySLAM/test/data/00.txt";
-string estimated_file = "/home/tianze/toySLAM/bin/00_est.txt";
+int main () 
+{
+  std::string config_file_path = "/home/tianze/toySLAM/config/default.yaml";
+  Config::SetParameterFile(config_file_path);
+  std::string groundtruth_file = Config::Get<std::string>("groundtruth_file_path");
+  std::string estimated_file = Config::Get<std::string>("outfile_path");
+  cout << "Evaluating estimation in " << estimated_file
+       << " against" << groundtruth_file << endl;
+  // Evaluate the trajectory.
+  evaluate(groundtruth_file, estimated_file);
 
-typedef vector<Sophus::SE3d, Eigen::aligned_allocator<Sophus::SE3d>> TrajectoryType;
-
-void DrawTrajectory(const TrajectoryType &gt, const TrajectoryType &est);
-
-TrajectoryType ReadTrajectory(const string &path);
-
-int main(int argc, char **argv) {
-  TrajectoryType groundtruth = ReadTrajectory(groundtruth_file);
-  TrajectoryType estimated = ReadTrajectory(estimated_file);
-  assert( !groundtruth.empty() && !estimated.empty() );
-  assert( groundtruth.size() == estimated.size() );
-
-  double rmse = 0;
-  for (size_t i = 0; i < estimated.size(); i++) {
-      Sophus::SE3d p1 = estimated[i], p2 = groundtruth[i];
-      double error = (p2.inverse() * p1).log().norm();
-      rmse += error*error;
-  }
-  rmse = rmse / double(estimated.size());
-  rmse = sqrt(rmse);
-  cout << "RMSE = " << rmse << endl;
-
-  DrawTrajectory(groundtruth, estimated);
-}
-
-
-TrajectoryType ReadTrajectory(const string &path) {
-  ifstream fin(path);
-  TrajectoryType trajectory;
-  if (!fin) {
-    cerr << "trajectory " << path << "not found. " << endl;
-    return trajectory;
-  }
-  
-  while(!fin.eof()) {
-    double r11, r12, r13, t1, r21, r22, r23, t2, r31, r32, r33, t3;
-    fin >> r11 >> r12 >> r13 >> t1 >> r21 >> r22 >> r23 >> t2 >> r31 >> r32 >> r33 >> t3;
-    Eigen::Matrix<double, 4, 4> T;
-    T << r11, r12, r13, t1, 
-         r21, r22, r23, t2, 
-         r31, r32, r33, t3,
-         0.0, 0.0, 0.0, 1.0;
-    Sophus::SE3d p1(T);
-    trajectory.push_back(p1);
-  }
-  return trajectory;
-}
-
-void DrawTrajectory(const TrajectoryType &gt, const TrajectoryType &esti) {
-  // create pangolin window and plot the trajectory
-  pangolin::CreateWindowAndBind("Trajectory Viewer", 1024, 768);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-  pangolin::OpenGlRenderState s_cam(
-      pangolin::ProjectionMatrix(1024, 768, 500, 500, 512, 389, 0.1, 1000),
-      pangolin::ModelViewLookAt(0, -0.1, -1.8, 0, 0, 0, 0.0, -1.0, 0.0)
-  );
-
-  pangolin::View &d_cam = pangolin::CreateDisplay()
-      .SetBounds(0.0, 1.0, pangolin::Attach::Pix(175), 1.0, -1024.0f / 768.0f)
-      .SetHandler(new pangolin::Handler3D(s_cam));
-
-
-  while (pangolin::ShouldQuit() == false) {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    d_cam.Activate(s_cam);
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-
-    glLineWidth(2);
-    for (size_t i = 0; i < gt.size() - 1; i++) {
-      glColor3f(0.0f, 0.0f, 1.0f);  // blue for ground truth
-      glBegin(GL_LINES);
-      auto p1 = gt[i], p2 = gt[i + 1];
-      glVertex3d(p1.translation()[0], p1.translation()[1], p1.translation()[2]);
-      glVertex3d(p2.translation()[0], p2.translation()[1], p2.translation()[2]);
-      glEnd();
-    }
-
-    for (size_t i = 0; i < esti.size() - 1; i++) {
-      glColor3f(1.0f, 0.0f, 0.0f);  // red for estimated
-      glBegin(GL_LINES);
-      auto p1 = esti[i], p2 = esti[i + 1];
-      glVertex3d(p1.translation()[0], p1.translation()[1], p1.translation()[2]);
-      glVertex3d(p2.translation()[0], p2.translation()[1], p2.translation()[2]);
-      glEnd();
-    }
-    pangolin::FinishFrame();
-    usleep(5000);   // sleep 5 ms
-  }
-
+  return 0;
 }

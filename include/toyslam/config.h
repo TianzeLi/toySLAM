@@ -23,6 +23,6 @@ class Config {
         return T(Config::config_->file_[key]);
     }
 };
-}  // namespace myslam
+}  // namespace toyslam
 
 #endif  // TOYSLAM_CONFIG_H
