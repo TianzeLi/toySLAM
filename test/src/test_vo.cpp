@@ -17,12 +17,15 @@
 using namespace toyslam;
 
 int main(int argc, char* argv[]) {
-  std::string config_file_path = "/home/tianze/toySLAM/config/default.yaml";
+  std::string config_file_path = "../config/default.yaml";
   Config::SetParameterFile(config_file_path);
 
   std::string dataset_path = Config::Get<std::string>("dataset_dir");
   std::string groundtruth_file = Config::Get<std::string>("groundtruth_file_path");
   std::string estimated_file = Config::Get<std::string>("outfile_path");
+  std::string do_evaluation_str = Config::Get<std::string>("do_evaluation");
+  bool do_evaluation = false; 
+  std::istringstream(do_evaluation_str) >> std::boolalpha >> do_evaluation;
   
   // Prepare the dataset.
   auto data = DataStereo::Ptr(new DataStereo(dataset_path));
@@ -30,7 +33,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Data loaded. ";
   else 
     LOG(ERROR) << "Data failed to load. "; 
-  unsigned bundle_size = 7;
+  int bundle_size = 7;
   
   // Initialize the BA.
   auto vo_ba = VOBA::Ptr(new VOBA(bundle_size));
@@ -38,15 +41,31 @@ int main(int argc, char* argv[]) {
   // Initialize the VO frontend.  
   VOFront vo_front(data);
   vo_front.set_do_RANSAC(Config::Get<std::string>("do_RANSAC"));
+  LOG(INFO) << vo_front.get_do_RANSAC();
+
   vo_front.set_outfile_path(Config::Get<std::string>("outfile_path"));
+  vo_front.set_do_triangulation_rejection
+    (Config::Get<std::string>("do_triangulation_rejection"));
+  vo_front.set_triangulate_error_threshold
+    (Config::Get<double>("triangulate_error_threshold"));
+  vo_front.set_epsilon_mag_threshold(Config::Get<double>("epsilon_mag_threshold"));
+  vo_front.set_GN_iteration_times_max(Config::Get<int>("GN_iteration_times_max"));
+  vo_front.set_RANSAC_iteration_times
+    (Config::Get<int>("RANSAC_iteration_times"));
+  vo_front.set_amount_pairs(Config::Get<int>("amount_pairs"));
+  vo_front.set_reprojection_angle_threshold
+    (Config::Get<double>("reprojection_angle_threshold"));
+  vo_front.set_write_est_to_file(Config::Get<std::string>("write_est_to_file"));
 
   vo_front.resigterBA(vo_ba);
   vo_front.init();
   vo_front.run();  
   
-  // Evaluate the estimated against the ground truth and plot.
-  LOG(INFO) << "Starting evaluation. ";
-  evaluate(groundtruth_file, estimated_file);
 
+  // Evaluate the estimated against the ground truth and plot.
+  if ( do_evaluation ) {
+    LOG(INFO) << "Starting evaluation. ";
+    evaluate(groundtruth_file, estimated_file);
+  }
   return 0;
 }

@@ -13,6 +13,7 @@
 #ifndef EVALUATE_TRACECTORY_H
 #define EVALUATE_TRACECTORY_H 
 
+#include "toyslam/common_include.h"
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
@@ -42,7 +43,7 @@ void evaluate(std::string groundtruth_file, std::string estimated_file) {
   }
   rmse = rmse / double(estimated.size());
   rmse = sqrt(rmse);
-  cout << "RMSE = " << rmse << endl;
+  LOG(INFO) << "RMSE = " << rmse << endl;
 
   DrawTrajectory(groundtruth, estimated);
 }
@@ -90,7 +91,7 @@ void DrawTrajectory(const TrajectoryType &gt, const TrajectoryType &esti) {
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     glLineWidth(2);
-    for (size_t i = 0; i < gt.size() - 1; i++) {
+    for (size_t i = 0; i < esti.size() - 1; i++) {
       glColor3f(0.0f, 1.0f, 0.0f);  // green for ground truth
       glBegin(GL_LINES);
       auto p1 = gt[i], p2 = gt[i + 1];

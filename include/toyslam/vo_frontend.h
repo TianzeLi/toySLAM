@@ -35,15 +35,37 @@ public:
   // Run the frontend.
   int run();
 
-  // Compute the pose.
-  Sophus::SE3d updatePose();
-
   // Register the frontend with BA.
   void resigterBA(VOBA::Ptr ba) { bundle_adjustment_ = ba; };
 
   // Parameter setting interfaces for configuration. 
-  void set_do_RANSAC(std::string s) { std::istringstream(s) >> do_RANSAC_ ; }
+  void set_do_RANSAC(std::string s) { 
+    std::istringstream(s) >> std::boolalpha >> do_RANSAC_ ; 
+    }
+  bool get_do_RANSAC() { return do_RANSAC_ ; }
+
+  void set_RANSAC_iteration_times(int n) { RANSAC_iteration_times_ =  n; }
+  void set_amount_pairs(int n) { RANSAC_amount_pairs_ = n; }
+
+  void set_do_triangulation_rejection(std::string s) 
+    { std::istringstream(s) >> std::boolalpha >> do_triangulation_rejection_;}
+  void set_triangulate_error_threshold(double t) { triangulate_error_threshold_ = t; }
+  void set_epsilon_mag_threshold(double t) { epsilon_mag_threshold_ = t; }
+  
+  void set_GN_iteration_times_max(int n) { GN_iteration_times_max_ = n; }
+  void set_reprojection_angle_threshold(double t) { reprojection_angle_threshold_ = t; }
+  
+  void set_write_est_to_file(std::string s) 
+    { std::istringstream(s) >> std::boolalpha >> write_est_to_file_ ; }
   void set_outfile_path(std::string s) { outfile_path = s; }
+  
+  void set_show_left_and_right_matches(std::string s) 
+    { std::istringstream(s) >> std::boolalpha >> show_left_and_right_matches_ ; }
+  void set_show_prev_and_curr_matches(std::string s) 
+    { std::istringstream(s) >> std::boolalpha >> show_prev_and_curr_matches_; }
+  void set_diaplay_single_match(std::string s) 
+    { std::istringstream(s) >> std::boolalpha >> diaplay_single_match_ ; }
+
 
   // The estimated pose of the left camera center.
   Sophus::SE3d pose;
@@ -52,7 +74,7 @@ private:
   // Configuration file path.
   std::string config_file_path_;
   // State of the VO frontend.
-  unsigned state_ = 0;
+  int state_ = 0;
   // Triangulation. 
   // If true, use triangulation reprojection error to reject mismatches.
   bool do_triangulation_rejection_ = true;
@@ -69,14 +91,14 @@ private:
   // RANSAC iteration times, equations in VO Tutorial.
   int RANSAC_iteration_times_ = 20;
   // RANSAC amounts of pairs for estimation in each iteration.
-  int amount_pairs_ = 7;
+  int RANSAC_amount_pairs_ = 7;
   // RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
   double reprojection_angle_threshold_ = 0.001; 
   // Bundle adjustment.
   bool do_bundle_adjustment_ = false;
   // If true, write estimation to an output file.
-  bool write_est_to_file = true;
-  std::string outfile_path = "/home/tianze/toySLAM/bin/00_est.txt";
+  bool write_est_to_file_ = true;
+  std::string outfile_path = "../bin/est_tmp.txt";
 
   // Display images settings.
   bool show_left_and_right_matches_ = false;

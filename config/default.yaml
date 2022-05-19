@@ -1,36 +1,43 @@
 %YAML:1.0
+# For all boolean variable, use true or false instead of 0 or 1.
+
 # data input
-dataset_dir: /home/tianze/toySLAM/test/data/00
+dataset_dir: ../test/data/00_sample_9_frames
 # dataset_dir: /home/tianze/Downloads/KittiBenchmark/data_odometry_gray/dataset/sequences/00
 
-# Front end
-# Triangulation. 
-# If true, use triangulation reprojection error to reject mismatches.
-# do_triangulation_rejection: true
+# FRONT END
+# Use or not triangulation reprojection error to reject mismatches.
+do_triangulation_rejection: true
 # Triangulation reprojection error threshold.
-# triangulate_error_threshold: 0.15;
-# Gauss-Newton
+triangulate_error_threshold: 0.15
+
 # Gauss-Newton optimization iteration threshold. 
-# epsilon_mag_threshold: 0.001; 
+epsilon_mag_threshold: 0.001 
 # Gauss-Newton optimization maximal iteration times. 
-# GN_iteration_times_max: 60; 
+GN_iteration_times_max: 60
+
 # RANSAC
-# If true, do RANSAC during the estimation.
-do_RANSAC: false
+# Do RANSAC or not during the estimation.
+do_RANSAC: true
 # RANSAC iteration times, equations in VO Tutorial.
-# int RANSAC_iteration_times: 20;
+RANSAC_iteration_times: 30
 # RANSAC amounts of pairs for estimation in each iteration.
-# amount_pairs: 7;
+amount_pairs: 7
 # RANSAC threshold for the angle between epipolar plane and reprojected arrow. 
-# double reprojection_angle_threshold: 0.001
-# Bundle adjustment.
+reprojection_angle_threshold: 0.001
+
+# Bundle adjustment. (BA not implemented yet)
 do_bundle_adjustment: false
+
+# Evaluation
+# Carry out or not the evaluation upon the estimation. 
+do_evaluation: true
 # If true, write estimation to an output file.
 write_est_to_file: true
-outfile_path: /home/tianze/toySLAM/bin/00_est.txt
-groundtruth_file_path: /home/tianze/toySLAM/test/data/00.txt
+outfile_path: ../bin/00_est.txt
+groundtruth_file_path: ../test/data/00.txt
 
 # Display images settings.
-# show_left_and_right_matches: false
-# show_prev_and_curr_matches: false
-# diaplay_single_match: false
+show_left_and_right_matches: false
+show_prev_and_curr_matches: false
+diaplay_single_match: false

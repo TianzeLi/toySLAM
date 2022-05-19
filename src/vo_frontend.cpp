@@ -23,7 +23,7 @@ bool VOFront::init(){
 int VOFront::run(){
   LOG(INFO) << " VO frontend now start to process the first frame. ";
   std::ofstream outfile;
-  if ( write_est_to_file ) {
+  if ( write_est_to_file_ ) {
     outfile.open(outfile_path);
     outfile << "1 0 0 0 0 1 0 0 0 0 1 0" << std::endl;
   }
@@ -57,7 +57,7 @@ int VOFront::run(){
                                                  data->getCamera(0));
     pose = frame_current_->pose;
     LOG(INFO) << " VO frontend at pose: \n" << pose.matrix();
-    if ( write_est_to_file ) {
+    if ( write_est_to_file_ ) {
       auto p = pose.matrix();
       assert(outfile.is_open());
       outfile << p(0,0) << " " << p(0,1) << " " << p(0,2) << " " << p(0,3) << " "
@@ -77,7 +77,7 @@ int VOFront::run(){
     LOG(INFO) << "Frame costed time: " << time_used.count() << " seconds.";
   }
 
-  if ( write_est_to_file ) outfile.close();
+  if ( write_est_to_file_ ) outfile.close();
   return 0;
 }
 
@@ -292,7 +292,7 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       std::random_device rd; // obtain a random number from hardware
       std::mt19937 gen(rd()); // seed the generator
       std::uniform_int_distribution<> distr(0, u_list.size()-1); // define the range
-      for (int j = 0; j < amount_pairs_; ++j){
+      for (int j = 0; j < RANSAC_amount_pairs_; ++j){
         int k = distr(gen);
         // To avoid drawing the same pair.
         if( std::find(k_list.begin(), k_list.end(), k) == k_list.end() ){
@@ -330,13 +330,13 @@ Sophus::SE3d VOFront::estimateTransformPnP(Frame::Ptr &frame_curr,
       inliner_list.push_back(in_list_tmp);
       count_list.push_back(count);
       VLOG(3) << "Has got " << count << " inliers out of " 
-              << u_list.size() - amount_pairs_;  
+              << u_list.size() - RANSAC_amount_pairs_;  
     }
 
     // Find the index i that has the most counts.
     int i_max_count = std::distance(count_list.begin(), std::max_element(count_list.begin(),count_list.end()));
     VLOG(1)<< "Estimation no. " << i_max_count << " has the most counts: "
-            << count_list[i_max_count] << " out of " << u_list.size() - amount_pairs_;
+            << count_list[i_max_count] << " out of " << u_list.size() - RANSAC_amount_pairs_;
     std::vector<Eigen::Matrix<double, 2, 1>> u_list_in;
     std::vector<Eigen::Matrix<double, 3, 1>> P_list_in;
     std::vector<int> inliner_est = inliner_list[i_max_count];
