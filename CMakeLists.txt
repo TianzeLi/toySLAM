@@ -7,7 +7,7 @@ set(USE_G20 True)
 # set(CMAKE_BUILD_TYPE Release)
 
 # Compiler settings.
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 # set(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 # set(CMAKE_CXX_FLAGS_RELEASE  "-std=c++14 -O3 -fopenmp -pthread")
@@ -23,12 +23,13 @@ endif()
 
 # Dependencies.
 include_directories("/usr/include/eigen3")
-include_directories("/usr/include/gnuplot-iostream")
+include_directories("/usr/include/gnuplot")
 find_package(OpenCV REQUIRED)
 find_package(Sophus REQUIRED)
 find_package(Glog REQUIRED) 
 find_package(gflags REQUIRED)
 find_package(Pangolin REQUIRED)
+find_package(Boost REQUIRED COMPONENTS iostreams system filesystem)
 
 # Include dirs
 include_directories(

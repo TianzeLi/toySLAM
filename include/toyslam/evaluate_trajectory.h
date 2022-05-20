@@ -20,11 +20,14 @@
 #include <pangolin/pangolin.h>
 #include <sophus/se3.hpp>
 #include <Eigen/Core>
+#include <boost/tuple/tuple.hpp>
+#include "gnuplot//gnuplot-iostream.h"
 
 using namespace std;
 
 typedef vector<Eigen::Vector3d> TrajectoryType;
 
+void plotTrajectory2D(const TrajectoryType &gt, const TrajectoryType &est);
 void DrawTrajectory(const TrajectoryType &gt, const TrajectoryType &est);
 
 TrajectoryType ReadTrajectory(const string &path);
@@ -45,14 +48,15 @@ void evaluate(std::string groundtruth_file, std::string estimated_file) {
   rmse = sqrt(rmse);
   LOG(INFO) << "RMSE = " << rmse << endl;
 
-  DrawTrajectory(groundtruth, estimated);
+  plotTrajectory2D(groundtruth, estimated);
+  // DrawTrajectory(groundtruth, estimated);
 }
 
 
 TrajectoryType ReadTrajectory(const string &path) {
   ifstream fin(path);
   TrajectoryType trajectory;
-  if (!fin) {
+  if( !fin ) {
     cerr << "trajectory " << path << "not found. " << endl;
     return trajectory;
   }
@@ -65,6 +69,28 @@ TrajectoryType ReadTrajectory(const string &path) {
     trajectory.push_back(V);
   }
   return trajectory;
+}
+
+void plotTrajectory2D(const TrajectoryType &gt, const TrajectoryType &est) {
+  Gnuplot gp;
+
+  std::vector<std::pair<double, double> > xy_pts_gt;
+  std::vector<std::pair<double, double> > xy_pts_est;
+
+  for(unsigned i = 0; i < est.size(); ++i) {
+    // Note that the transform between the camera frame and word frame.
+    xy_pts_gt.push_back(std::make_pair(gt[i](0), gt[i](2)));
+    xy_pts_est.push_back(std::make_pair(est[i](0), est[i](2)));
+  }
+
+  // gp << "set size ratio -1" << std::endl;
+  gp << "set xrange[-2:2]; set yrange[-2:10]; set size ratio -1;" << std::endl;
+  // gp << "set grid" << std::endl;
+  gp << "plot" << gp.file1d(xy_pts_gt) << "lw 4 with lines title 'Ground truth',"
+	   << gp.file1d(xy_pts_est) << "lw 4 with lines title 'Estimated'," << std::endl; 
+  // gp << "set style line 1 lw 7" << std::endl;
+  // gp << "set style line 2 lw 7" << std::endl;
+
 }
 
 void DrawTrajectory(const TrajectoryType &gt, const TrajectoryType &esti) {

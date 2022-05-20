@@ -56,6 +56,14 @@ int main(int argc, char* argv[]) {
   vo_front.set_reprojection_angle_threshold
     (Config::Get<double>("reprojection_angle_threshold"));
   vo_front.set_write_est_to_file(Config::Get<std::string>("write_est_to_file"));
+  vo_front.set_show_left_and_right_matches
+    (Config::Get<std::string>("show_left_and_right_matches"));  
+  vo_front.set_show_prev_and_curr_matches
+    (Config::Get<std::string>("show_prev_and_curr_matches"));
+  vo_front.set_diaplay_single_match
+    (Config::Get<std::string>("diaplay_single_match"));
+
+
 
   vo_front.resigterBA(vo_ba);
   vo_front.init();

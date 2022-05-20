@@ -9,16 +9,16 @@ dataset_dir: ../test/data/00_sample_9_frames
 # Use or not triangulation reprojection error to reject mismatches.
 do_triangulation_rejection: true
 # Triangulation reprojection error threshold.
-triangulate_error_threshold: 0.15
+triangulate_error_threshold: 0.001
 
 # Gauss-Newton optimization iteration threshold. 
-epsilon_mag_threshold: 0.001 
+epsilon_mag_threshold: 0.0005 
 # Gauss-Newton optimization maximal iteration times. 
 GN_iteration_times_max: 60
 
 # RANSAC
 # Do RANSAC or not during the estimation.
-do_RANSAC: true
+do_RANSAC: false
 # RANSAC iteration times, equations in VO Tutorial.
 RANSAC_iteration_times: 30
 # RANSAC amounts of pairs for estimation in each iteration.
