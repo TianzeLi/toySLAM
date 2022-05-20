@@ -22,7 +22,7 @@ A visual SLAM implementation for learning's sake. Partly based on ![slambook](ht
 
 ## Dependency and installation
 
-The compiling 
+cmake files included. 
 
 <a name="Installation"></a>
 Module | Dependency
