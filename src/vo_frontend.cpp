@@ -397,7 +397,7 @@ Sophus::SE3d VOFront::GaussNewton(std::vector<Eigen::Matrix<double, 2, 1>> &u_li
       // delta_transpose: 6*2 matrix
       delta_transpose << -fx*Z_inv, 0.0, fx*X*Z_inv*Z_inv,
                          fx*X*Y*Z_inv*Z_inv, -fx-fx*X*X*Z_inv*Z_inv, fx*Y*Z_inv,
-                         0.0, -fy*Z_inv, fy*Y*Z_inv,
+                         0.0, -fy*Z_inv, fy*Y*Z_inv*Z_inv,
                          fy+fy*Y*Y*Z_inv*Z_inv, -fy*X*Y*Z_inv*Z_inv, -fy*X*Z_inv;
       // beta: 2*1 matrix
       beta << u1-fx*X*Z_inv-cx, u2-fy*Y*Z_inv-cy;

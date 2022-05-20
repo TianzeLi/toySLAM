@@ -2,8 +2,8 @@
 # For all boolean variable, use true or false instead of 0 or 1.
 
 # data input
-dataset_dir: ../test/data/00_sample_9_frames
-# dataset_dir: /home/tianze/Downloads/KittiBenchmark/data_odometry_gray/dataset/sequences/00
+# dataset_dir: ../test/data/00_sample_9_frames
+dataset_dir: /home/tianze/Downloads/KittiBenchmark/data_odometry_gray/dataset/sequences/00
 
 # FRONT END
 # Use or not triangulation reprojection error to reject mismatches.

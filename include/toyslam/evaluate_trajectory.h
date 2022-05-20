@@ -46,9 +46,17 @@ void evaluate(std::string groundtruth_file, std::string estimated_file) {
   }
   rmse = rmse / double(estimated.size());
   rmse = sqrt(rmse);
+  
+  Eigen::Vector3d p1_end = estimated[-1], p2_end = groundtruth[estimated.size()-1];
+  double error = (p1_end - p2_end).norm();
+  LOG(INFO) << "Total steps: " << estimated.size();
   LOG(INFO) << "RMSE = " << rmse << endl;
+  LOG(INFO) << "Final offset distance =  " << sqrt(error) << endl;
+  // LOG(INFO) << "Final offset (X, Y, Z) =  " << rmse << endl;
 
+  // Plot XY in 2D using gnuplot.
   plotTrajectory2D(groundtruth, estimated);
+  // Plot XYZ in 3D using Pangolin.
   // DrawTrajectory(groundtruth, estimated);
 }
 
@@ -83,11 +91,17 @@ void plotTrajectory2D(const TrajectoryType &gt, const TrajectoryType &est) {
     xy_pts_est.push_back(std::make_pair(est[i](0), est[i](2)));
   }
 
-  // gp << "set size ratio -1" << std::endl;
-  gp << "set xrange[-2:2]; set yrange[-2:10]; set size ratio -1;" << std::endl;
+  gp << "set size ratio -1"  << std::endl;
+  // gp << "set xrange[-125:125]; set yrange[-25:500]; set size ratio -1;" << std::endl;
   // gp << "set grid" << std::endl;
-  gp << "plot" << gp.file1d(xy_pts_gt) << "lw 4 with lines title 'Ground truth',"
-	   << gp.file1d(xy_pts_est) << "lw 4 with lines title 'Estimated'," << std::endl; 
+  gp << "set ylabel 'y (m)'; set xlabel 'x (m)'" << std::endl;
+  gp << "set terminal png" << std::endl;
+  gp << "set output 'output.png'" << std::endl;
+  gp << "plot" 
+     << gp.file1d(xy_pts_gt) 
+     << "lw 3 lt rgb '#008b8b' with lines title 'Ground truth',"
+	   << gp.file1d(xy_pts_est) 
+     << "lw 3 lt rgb 'orange' with lines title 'Estimated'," << std::endl; 
   // gp << "set style line 1 lw 7" << std::endl;
   // gp << "set style line 2 lw 7" << std::endl;
 

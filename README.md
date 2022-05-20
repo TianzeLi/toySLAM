@@ -1,5 +1,5 @@
 # toySLAM 
-**_(Current contains the feature-based stereo VO but the content will be enriched.)_**
+**_(Currently contains the feature-based stereo VO but the content shall be enriched.)_**
 <!-- ![](doc/media/projectTheme2.png) -->
 
 ## Contents
@@ -16,25 +16,30 @@
 ## Overview
 <a name="Overview"></a>
 
-A SLAM implementation for learning's sake. Partly based on the ![slambook](https://github.com/gaoxiang12/slambook2). In particular, the feature-based visual odometry minimizes the re-projection error that formulated in the perspective-n-point method. It is solved by Gauss-Newton iteration on transform matrix group and outliers are rejected by RANSAC. The performance is evaluated on the Kitti stereo dataset.
+A visual SLAM implementation for learning's sake. Partly based on ![slambook](https://github.com/gaoxiang12/slambook2). In particular, the feature-based visual odometry minimizes the re-projection error that formulated in the perspective-n-point method. It is solved by Gauss-Newton iteration on transform matrix group and outliers are rejected by RANSAC. The performance is evaluated on the Kitti stereo dataset.
 
 
 
 ## Dependency and installation
+
+The compiling 
+
 <a name="Installation"></a>
 Module | Dependency
 ---------------- | -------
 Feature detection     | `OpenCV` 
 Feature matching      | `OpenCV`
-P-n-P estimation      | `Sophus`
+P-n-P estimation      | `Sophus` and `Eigen`
 Bundle adjustment     | `g2o`
+Visualization         | `gnuplot` and `Pangolin`
+Logging               | `GLOG`
 
 
 
 ## Launch and testing
 <a name="Launch"></a>
 
-Once the project is compiled, the following executable will be available in the `/bin` folder. The configuration is up for changes in `/config/default.yaml`. 
+The following executable are compiled to folder `/bin`. The configuration is up for changes in `/config/default.yaml`. 
 
 Executable files | Functions
 ---------------- | -------
