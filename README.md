@@ -18,6 +18,7 @@
 
 A visual SLAM implementation for learning's sake. Partly based on ![slambook](https://github.com/gaoxiang12/slambook2). In particular, the feature-based visual odometry minimizes the re-projection error that formulated in the perspective-n-point method. It is solved by Gauss-Newton iteration on transform matrix group and outliers are rejected by RANSAC. The performance is evaluated on the Kitti stereo dataset.
 
+Initial report that covers up till VO without bundle adjustment is available in the ![doc](https://github.com/TianzeLi/toySLAM/doc/report-EL2620-TianzeLi.pdf).
 
 
 ## Dependency and installation
