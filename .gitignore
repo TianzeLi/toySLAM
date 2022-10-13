@@ -5,7 +5,7 @@ build/
 # Ignore the projec report related files.
 report_EL2620/
 # But include the report itself.
-!report-EL2620-TianzeLi.pdf
+!doc/report_EL2620/report-EL2620-TianzeLi.pdf
 
 # Ignore the test data.
 test/data/
